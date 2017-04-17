@@ -56,6 +56,7 @@ PulseS0::PulseS0( byte wh_child_id, byte va_child_id, byte irq_pin, byte enabled
     digitalWrite( this->led_pin, LOW );
     pinMode( this->led_pin, OUTPUT );
 
+    memset( this->name, '\0', PULSES0_NAME_SIZE );
     this->impkwh = 0;
     this->implen = 0;
     this->is_enabled = false;
@@ -99,13 +100,40 @@ byte PulseS0::getIrqPin()
 }
 
 /**
- * setProperties:
+ * reqProperties:
+ * 
+ * Public
+ */
+void PulseS0::reqProperties( void )
+{
+#ifdef PULSES0_DEBUG
+    Serial.println( F( "[PulseS0::reqProperties]" ));
+    Serial.print( F( "[PulseS0::reqProperties] name=" ));   Serial.println( this->name );
+    Serial.print( F( "[PulseS0::reqProperties] impkwh=" )); Serial.println( this->impkwh );
+    Serial.print( F( "[PulseS0::reqProperties] implen=" )); Serial.println( this->implen );
+#endif
+}
+
+/**
+ * setModel:
+ * @model: the model name.
+ * 
+ * Public
+ */
+void PulseS0::setModel( const char *model )
+{
+    memset( this->name, '\0', PULSES0_NAME_SIZE );
+    strncpy( this->name, model, PULSES0_NAME_SIZE-1 );
+}
+
+/**
+ * setResolution:
  * @impkwh: count of impulsions per kWh
  * @implen: length of the low pulse
  * 
  * Public
  */
-void PulseS0::setProperties( uint8_t impkwh, uint8_t implen )
+void PulseS0::setResolution( uint16_t impkwh, uint16_t implen )
 {
     this->impkwh = impkwh;
     this->implen = implen;

@@ -43,6 +43,7 @@ static const char * const thisSketchVersion = "1.0-2017";
 #include <MySensors.h>
 
 enum {
+    CHILD_ID_ACTOR = 1,
     CHILD_ID_PULSE_WH_1 = 10,
     CHILD_ID_PULSE_VA_1,
     CHILD_ID_PULSE_WH_2 = 20,
@@ -52,6 +53,9 @@ enum {
     CHILD_ID_PULSE_WH_4 = 40,
     CHILD_ID_PULSE_VA_4,
 };
+
+static const int wait_interval_default = 500;
+static int wait_interval = wait_interval_default;
 
 /* **************************************************************************************
  * MySensors gateway
@@ -63,6 +67,7 @@ void presentation_my_sensors()
 #endif
 #ifdef HAVE_NRF24_RADIO
     sendSketchInfo( thisSketchName, thisSketchVersion );
+    present( CHILD_ID_ACTOR, S_CUSTOM );
 #endif // HAVE_NRF24_RADIO
 }
 
@@ -174,6 +179,92 @@ void loop()
     pulse_1.runLoop( pulse_output, &msgKWH, &msgWATT );
     pulse_2.runLoop( pulse_output, &msgKWH, &msgWATT );
 #endif
-    wait( 500 );
+    wait( wait_interval );
+}
+
+/*
+ * Handle a V_CUSTOM request on CHILD_ID_ACTOR: send the node properties
+ * 
+ * Request is semi-comma delimited string, where:
+ * - first member(a number):
+ *   request_type:
+ *     1 for requesting sensor properties
+ *     2 for setting a global variable
+ *     3 for requesting a global variable
+ * - second member (a number):
+ *   if request_type is 1: the CHILD_ID_xxx_1 or CHILD_ID_xxx_2 requested sensor
+ *   if request_type is 2: the id of the global variable to be set
+ *     1: the loop interval in ms (default to 500ms)
+ *        and the value must be third member (must be > 0, or 0 to reset default value)
+ *   if request_type is 3: the id of the global variable to be got
+ *     1: the current loop interval in ms
+ *     2: the default loop interval in ms
+ */
+void receive(const MyMessage &message)
+{
+    char buffer[1+MAX_PAYLOAD];
+    uint8_t cmd = message.getCommand();
+    uint8_t request_type;
+    if( message.type == V_CUSTOM ){
+        if( cmd == C_REQ && message.sensor == CHILD_ID_ACTOR ){
+            memset( buffer, '\0', sizeof( buffer ));
+            message.getString( buffer );
+            char *p = buffer;
+            char *str = strtok_r( p, ";", &p );
+            if( str && strlen( str ) > 0 ){
+                request_type = atoi( str );
+                
+                /* if request_type is 1, second member should the requested child_id */
+                if( request_type == 1 ){
+                    str = strtok_r( p, ";", &p );
+                    if( str && strlen( str ) > 0 ){
+                        uint8_t child_id = atoi( str );
+                        if( child_id == CHILD_ID_PULSE_WH_1 || child_id == CHILD_ID_PULSE_VA_1 ){
+                            pulse_1.reqProperties();
+                        
+                        } else if( child_id == CHILD_ID_PULSE_WH_2 || child_id == CHILD_ID_PULSE_VA_2 ){
+                            pulse_2.reqProperties();
+                        }
+                    }
+
+                /* if request_type is 2, set a global variable
+                 *  second member is the variable id
+                 *  third member is the new value to be set */
+                } else if( request_type == 2 ){
+                    str = strtok_r( p, ";", &p );
+                    if( str && strlen( str ) > 0 ){
+                        uint8_t var_id = atoi( str );
+                        if( var_id > 0 ){
+                            str = strtok_r( p, ";", &p );
+                            if( str && strlen( str ) > 0 ){
+                                int value = atoi( str );
+                                if( var_id == 1 ){
+                                    if( value > 0 ){
+                                        wait_interval = value;
+                                    } else {
+                                        wait_interval = wait_interval_default;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                /* if request_type is 3, get a global variable
+                 *  second member is the variable id */
+                } else if( request_type == 3 ){
+                    str = strtok_r( p, ";", &p );
+                    if( str && strlen( str ) > 0 ){
+                        uint8_t var_id = atoi( str );
+                        /* get current wait interval */
+                        if( var_id == 1 ){
+
+                        /* get default wait interval */
+                        } else if( var_id == 2 ){
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 

@@ -19,6 +19,9 @@ enum {
     PULSES0_REASON_TIMEOUT
 };
 
+/* the size of the model name, including the null-terminating byte */
+#define PULSES0_NAME_SIZE            15
+
 // a callback when the module wants output its data 
 typedef struct {
     byte          wh_child_id;
@@ -42,7 +45,9 @@ class PulseS0 {
         byte getWHChildId();
         byte getVAChildId();
         byte getIrqPin();
-        void setProperties( uint8_t impkwh, uint8_t implen );
+        void reqProperties( void );
+        void setModel( const char *model );
+        void setResolution( uint16_t impkwh, uint16_t implen );
         void runLoop( PulseS0Output output_fn, void *msg_kwh, void *msg_watt );
         void onPulse();
 
@@ -54,8 +59,9 @@ class PulseS0 {
         byte          led_pin;
         byte          irq_pin;
         // properties
-        uint8_t       impkwh;
-        uint8_t       implen;
+        char          name[PULSES0_NAME_SIZE];
+        uint16_t      impkwh;
+        uint16_t      implen;
         // runtime
         bool          is_enabled;
         unsigned long last_output_ms;

@@ -11,6 +11,7 @@
  */
 Drs155::Drs155( byte wh_child_id, byte va_child_id, byte irq_pin, byte enabled_pin, byte led_pin ) : PulseS0( wh_child_id, va_child_id, irq_pin, enabled_pin, led_pin )
 {
-    this->setProperties( DRS155_IMP_KWH, DRS155_IMP_LENGTH );
+    this->setModel( "DRS155-D" );
+    this->setResolution( DRS155_IMP_KWH, DRS155_IMP_LENGTH );
 }
 
