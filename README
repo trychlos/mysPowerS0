@@ -1,0 +1,52 @@
+ mysPowerS0 - README
+
+ Summary
+ =======
+ 
+   Todo
+   Done
+
+-----------------------------------------------------------------------
+ Done
+ ====
+
+Principe
+========
+Board Arduino Nano + NRF24L01 mySensors radio module -> Jeedom
+
+We are using:
+
+  For each DRS155:
+    - one digital input for enabled status
+    - one digital input for pulse (on falling interrupt)
+    - one digital output for LED
+
+IRQ
+===
+After NRF24L01 is connected, there are 12 digital pins left available on the Nano:
+  - enough pins for 4 x DRS155
+
+The hardware IRQ0 (D2) is left free.
+
+We choose to only use the single PCINT1 vector to all other four DRS155 modules.
+So that PCINT2 vector (port D) may be left unused.
+
+DRS155-D
+monophasé
+50 A
+1000 imp/kWh
+90 ms
+http://www.cartelectronic.fr/electricite/52-compteur-energie-retroeclaire.html
+25 € TTC port compris
+
+WSZ12DE-32A
+monophasé
+32 A
+2000 imp/kWh
+50 ms
+https://www.elektroradar.de/wechselstromzaehler-wsz12de-32a.html
+34 € TTC port compris
+
+-----------------------------------------------------------------------
+ P. Wieser - Created on 2017, apr. 2nd
+
