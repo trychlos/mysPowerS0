@@ -64,6 +64,7 @@ class PulseS0 {
         uint16_t      implen;
         // runtime
         bool          is_enabled;
+        bool          first;
         unsigned long last_output_ms;
         float         energy_pulse_wh;
         float         power_k;

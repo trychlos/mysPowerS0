@@ -27,7 +27,7 @@
 #define HAVE_PULSES0
 
 static const char * const thisSketchName    = "mysPowerS0";
-static const char * const thisSketchVersion = "1.0-2017";
+static const char * const thisSketchVersion = "1.1-2017";
 
 //#define MY_DEBUG
 #define MY_RADIO_NRF24
@@ -54,7 +54,7 @@ enum {
     CHILD_ID_PULSE_VA_4,
 };
 
-static const int wait_interval_default = 500;
+static const int wait_interval_default = 1000;      /* 1000 ms = 1 sec. */
 static int wait_interval = wait_interval_default;
 
 /* **************************************************************************************
@@ -131,9 +131,6 @@ void presentation_pulse( void *vdrs, void *irq_fn )
 void pulse_output( void *vdata, void *kwh_msg, void *watt_msg )
 {
     PulseS0Data *data = ( PulseS0Data * ) vdata;
-#ifdef DEBUG_ENABLED
-    pulses0_dump( *data );
-#endif
 #ifdef HAVE_NRF24_RADIO
     MyMessage *msg_kwh = ( MyMessage * ) kwh_msg;
     MyMessage *msg_watt = ( MyMessage * ) watt_msg;

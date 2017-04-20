@@ -4,7 +4,7 @@
 // uncomment to debugging this file
 #define PULSES0_DEBUG
 
-#define PULSES0_CHANGE_TIMEOUT  60000           /* send status at least every minute */
+#define PULSES0_CHANGE_TIMEOUT  3600000           /* send status at least every hour with va=0 */
 
 /**
  * pulses0_dump:
@@ -60,6 +60,7 @@ PulseS0::PulseS0( byte wh_child_id, byte va_child_id, byte irq_pin, byte enabled
     this->impkwh = 0;
     this->implen = 0;
     this->is_enabled = false;
+    this->first = true;
     this->last_output_ms = 0;
     this->pulse_count = 0;
     this->last_pulse_ms = 0;
@@ -141,8 +142,8 @@ void PulseS0::setResolution( uint16_t impkwh, uint16_t implen )
     // pre-compute some constants:
     // - energy_pulse_wh: energy consumed in Wh between two pulses
     // - power_k:         a constant to compute the inst. power
-    this->energy_pulse_wh = 1000000.0 / ( float ) impkwh;
-    this->power_k = 3600.0 * this->energy_pulse_wh;
+    this->energy_pulse_wh = 1000.0 / ( float ) impkwh;
+    this->power_k = 3600000.0 * this->energy_pulse_wh;
 }
 
 /*
@@ -155,6 +156,10 @@ void PulseS0::setResolution( uint16_t impkwh, uint16_t implen )
 void PulseS0::onPulse()
 {
     if( this->is_enabled ){
+
+#ifdef PULSES0_DEBUG
+    Serial.print( F( "[PulseS0::onPulse]: id=" ));   Serial.println( this->wh_child_id );
+#endif
 
         // compute the elapsed time since last interrupt
         //  taking into account the case where the counter is in overflow
@@ -171,14 +176,18 @@ void PulseS0::onPulse()
         // inc the pulse (energy) counter
         this->pulse_count += 1;
 
-        // compute the consumed power since last pulse time
-        // inst_power = delta_energy / delta_time
-        // by definition, delta_energy here is the energy consumed between two pulses
-        // i.e. delta_energy (Wh)   = 1000 / impkwh
-        //   so delta_energy (W.ms) = 1000 / impkwh * 3600 (s/h) * 1000 (ms/s)
-        //   so inst_power   (W)    = 1000 / impkwh * 3600 (s/h) * 1000 (ms/s) / delay_between_pulses
-        // see http://openenergymonitor.org/emon/buildingblocks/introduction-to-pulse-counting
-        this->p_inst_w = this->power_k / ( float ) length_ms;
+        if( !this->first ){
+            // compute the consumed power since last pulse time
+            // inst_power = delta_energy / delta_time
+            // by definition, delta_energy here is the energy consumed between two pulses
+            // i.e. delta_energy (Wh)   = 1000 / impkwh
+            //   so delta_energy (W.ms) = 1000 / impkwh * 3600 (s/h) * 1000 (ms/s)
+            //   so inst_power   (W)    = 1000 / impkwh * 3600 (s/h) * 1000 (ms/s) / delay_between_pulses
+            // see http://openenergymonitor.org/emon/buildingblocks/introduction-to-pulse-counting
+            this->p_inst_w = this->power_k / ( float ) length_ms;
+        }
+
+        this->first = false;
     }
 }
 
@@ -193,7 +202,7 @@ void PulseS0::runLoop( PulseS0Output output_fn, void *msg_kwh, void *msg_watt )
     PulseS0Data power_data;
 
 #ifdef PULSES0_DEBUG
-    Serial.println( F( "[PulseS0::loop]" ));
+    Serial.print( F( "[PulseS0::loop] id=" )); Serial.println( this->wh_child_id );
 #endif
     this->getEnabled();
 
@@ -207,6 +216,7 @@ void PulseS0::runLoop( PulseS0Output output_fn, void *msg_kwh, void *msg_watt )
             unsigned long delay_ms = untilNow( now_ms, this->last_output_ms );
             if( delay_ms > PULSES0_CHANGE_TIMEOUT ){
                 reason = PULSES0_REASON_TIMEOUT;
+                this->p_inst_w = 0;
             }
         }
         if( reason != 0 ){
@@ -228,7 +238,7 @@ void PulseS0::runLoop( PulseS0Output output_fn, void *msg_kwh, void *msg_watt )
 
 /*
  * This is called in each loop
- * Only debug status changes
+ * Only print debug if status changes
  * 
  * Private
  */
@@ -241,7 +251,7 @@ bool PulseS0::getEnabled()
 #ifdef PULSES0_DEBUG
     if( was_enabled != this->is_enabled ){
         Serial.print( F( "PulseS0: wh_child=" )); Serial.print( this->wh_child_id );
-        Serial.print( F( "PulseS0: va_child=" )); Serial.print( this->va_child_id );
+        Serial.print( F( ", va_child=" ));        Serial.print( this->va_child_id );
         Serial.print( F( ", enabled=" ));         Serial.println( this->is_enabled ? "True":"False" );
     }
 #endif
