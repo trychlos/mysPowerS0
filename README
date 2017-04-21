@@ -3,50 +3,100 @@
  Summary
  =======
  
-   Todo
-   Done
+   Description
+   Interrupts
+   Configuration
+   Hardware
 
 -----------------------------------------------------------------------
- Done
- ====
+ Description
+ ===========
 
-Principe
-========
-Board Arduino Nano + NRF24L01 mySensors radio module -> Jeedom
+ mysPowerS0 is a MySensors v2.x module, built on an Arduino Nano.
 
-We are using:
+ It may connect up to four Pulse S0 meter modules, and transmit energy
+ (Wh) and power (VA) to the controller.
 
-  For each DRS155:
-    - one digital input for enabled status
-    - one digital input for pulse (on falling interrupt)
-    - one digital output for LED
+ The controller transmission uses NRF24L01 radio-module.
 
-IRQ
-===
-After NRF24L01 is connected, there are 12 digital pins left available on the Nano:
-  - enough pins for 4 x DRS155
+ Each Pulse S0 module use three pins:
+ - the data input pin;
+ - an enable pin, which has to be shortened to GND if the module is not
+   present;
+ - a LED pin which is on when the module is enabled.
 
-The hardware IRQ0 (D2) is left free.
+ Due to the count of pins each Pulse S0 module uses, the mysPowerS0 can
+ manage up to four Pulse S0 meter modules.
 
-We choose to only use the single PCINT1 vector to all other four DRS155 modules.
-So that PCINT2 vector (port D) may be left unused.
+-----------------------------------------------------------------------
+ Interrupts
+ ==========
 
-DRS155-D
-monophasé
-50 A
-1000 imp/kWh
-90 ms
-http://www.cartelectronic.fr/electricite/52-compteur-energie-retroeclaire.html
-25 € TTC port compris
+ The Arduino Nano only has two hardware interrupts, which we are leaving
+ free here.
 
-WSZ12DE-32A
-monophasé
-32 A
-2000 imp/kWh
-50 ms
-https://www.elektroradar.de/wechselstromzaehler-wsz12de-32a.html
-34 € TTC port compris
+ The NRF24L01 radio-module makes full use of Port B (PCINT0).
+
+ We choose to only use the Port C (PCINT1) for our Pulse S0 modules, and
+ manage it through software interrupts.
+
+ Pulse counter is triggered on descending IRQ.
+
+-----------------------------------------------------------------------
+ Configuration
+ =============
+
+ As of v1.2, Pulse S0 meter modules default to be configured as:
+ - 1000 impulsions per kWh
+ - 90 ms impulsion
+ - noname.
+
+ These parameters can be configured as follow:
+
+ - C_SET on VA or WH child_id:
+   payload = '1=<value>' count of impulsions per kW.h (default=1000)
+   payload = '2=<value>' length of the impulsion (ms)
+   payload = '3=<value>' model name (22 chars max)
+   payload = '4=<impkwh>,<implen>,<name>'
+
+ - C_REQ on VA or WH child_id:
+   payload = '1' send count of impulsions per kWh (impkwh) as a string 'kwh=<value>'
+   payload = '2' send the minimal length of the impulsion as a string 'l=<value>'
+   payload = '3' send the preset model name as a string 'n=<value>'
+   payload = '4' send all the previous three messages
+   
+ Global configuration can be:
+
+ - C_SET on CHILD_ID_GLOBAL = 1:
+   payload = '1'         reset the loop interval to its default value
+   payload = '2=<value>' set the loop interval to the provided value (ms)
+
+ - C_REQ on CHILD_ID_GLOBAL = 1:
+   payload = '1' send the default loop interval
+   payload = '2' send the current loop interval
+   payload = '3' send the current count of enabled modules
+
+-----------------------------------------------------------------------
+ Hardware
+ ========
+
+ DRS155-D
+ monophasé
+ 50 A
+ 1000 imp/kWh
+ 90 ms
+ http://www.cartelectronic.fr/electricite/52-compteur-energie-retroeclaire.html
+ 25 € TTC port compris
+
+ WSZ12DE-32A
+ monophasé
+ 32 A
+ 2000 imp/kWh
+ 50 ms
+ https://www.elektroradar.de/wechselstromzaehler-wsz12de-32a.html
+ 34 € TTC port compris
 
 -----------------------------------------------------------------------
  P. Wieser - Created on 2017, apr. 2nd
+             Last updated on 2017, apr. 21st
 

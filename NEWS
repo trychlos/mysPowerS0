@@ -3,17 +3,19 @@
  Summary
  =======
  
-   Version 
+   Version 1.2
 
 -----------------------------------------------------------------------
- Version 
- ==============
+ Version 1.2
+ ===========
 
- Released on 
+ Released on 2017-04-21 
 
  New features and improvements:
 
-   - First release
+   - Pulse S0 modules can be configured from Jeedom interface.
+   - VA power is reset to zero on pulse timeout.
+   - Pulse S0 configuration is loaded from / saved to user EEPROM.
 
  Bug fixes:
 
@@ -25,4 +27,5 @@
 
 -----------------------------------------------------------------------
  P. Wieser - Created on 2017, apr. 2nd
+             Last updated on 2017, apr. 21st
 
