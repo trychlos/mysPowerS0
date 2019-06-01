@@ -3,7 +3,45 @@
  Summary
  =======
  
+   Version 2.1-2019
+   Version 2.0-2019
    Version 1.2
+
+-----------------------------------------------------------------------
+ Version 2.1-2019
+ ================
+
+ Released on 2019-06-01
+
+ New features and improvements:
+
+   -
+
+ Bug fixes:
+
+   - VA power is reset to zero on pulse timeout.
+
+ Other changes:
+
+   - Each information has its own child sensor id.
+
+-----------------------------------------------------------------------
+ Version 2.0-2019
+ ================
+
+ Released on 2019-05-26
+
+ New features and improvements:
+
+   - Full rewrite using pwiSensor.
+
+ Bug fixes:
+
+   - 
+
+ Other changes:
+
+   - 
 
 -----------------------------------------------------------------------
  Version 1.2
