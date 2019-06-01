@@ -15,7 +15,8 @@
 
  New features and improvements:
 
-   -
+   - Implement periodic data dump.
+   - Send library version at startup.
 
  Bug fixes:
 
@@ -24,6 +25,7 @@
  Other changes:
 
    - Each information has its own child sensor id.
+   - Fix EEPROM dump.
 
 -----------------------------------------------------------------------
  Version 2.0-2019
