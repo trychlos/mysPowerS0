@@ -30,6 +30,7 @@ void deviceReset( sDevice *data )
     data->impkwh = 1000;
     data->implen = 90;
     data->countwh = 0;
+    //                     1234567890123456789012345
     strcpy( data->device, "DEFAULT" );
 }
 

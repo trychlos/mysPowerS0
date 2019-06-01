@@ -23,15 +23,16 @@
  * size of the device model name, including the null-terminating byte
  */
 #define DEVICE_COUNT          4
-#define DEVICE_NAME_SIZE     23
+#define DEVICE_NAME_SIZE      25  // MAX_PAYLOAD
 
 typedef struct {
     uint16_t      impkwh;
     uint16_t      implen;
-    char          device[DEVICE_NAME_SIZE];
+    char          device[DEVICE_NAME_SIZE+1];
     unsigned long countwh;
 }
   sDevice;
+  // sizeof( sDevice ) = 34
 
 void deviceDump( sDevice &data );
 void deviceReset( sDevice *data );
