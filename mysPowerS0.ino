@@ -31,9 +31,13 @@
    pwi 2017- 3-26 creation
    pwi 2017- 4-20 v 1.1
    pwi 2019- 5-26 v 2.0-2019 full rewrite using pwiSensor
+   pwi 2019- 5-26 v 2.1-2019
+                    send library version
+                    reset power on pulse timeout
+                    implement periodic data dump
 
-  Sketch uses 20862 bytes (67%) of program storage space. Maximum is 30720 bytes.
-  Global variables use 1504 bytes (73%) of dynamic memory, leaving 544 bytes for local variables. Maximum is 2048 bytes.
+  Sketch uses 21596 bytes (70%) of program storage space. Maximum is 30720 bytes.
+  Global variables use 1628 bytes (79%) of dynamic memory, leaving 420 bytes for local variables. Maximum is 2048 bytes.
 */
 
 // uncomment for debugging this sketch
@@ -43,7 +47,7 @@
 #define HAVE_NRF24_RADIO
 
 static const char * const thisSketchName    = "mysPowerS0";
-static const char * const thisSketchVersion = "2.0-2019";
+static const char * const thisSketchVersion = "2.1-2019";
 
 enum {
     CHILD_MAIN = 1,
@@ -74,16 +78,16 @@ enum {
 
 MyMessage msg;
 
-
-/* **************************************************************************************
- *  EEPROM
+/*
+ * Declare our classes
  */
-#include "eeprom.h"
-sEeprom eeprom;
-
-// auto save timer declared here to be available in pulse* functions
+#include <pwiSensor.h>
 #include <pwiTimer.h>
-pwiTimer main_timer;
+#include "eeprom.h"
+
+sEeprom eeprom;
+pwiTimer autosave_timer;
+pwiTimer autodump_timer;
 
 /* **************************************************************************************
  * Pulse S0 module management
@@ -160,7 +164,7 @@ void pulseSend( uint8_t id, float watt, unsigned long wh )
     send( msg.setSensor( id+1 ).setType( V_KWH ).set( wh ));
 }
 
-void pulseDumpConfiguration( uint8_t id, pwiPulse *pulse )
+void pulseDumpData( uint8_t id, pwiPulse *pulse )
 {
     msg.clear();
     send( msg.setSensor( id+2 ).setType( V_VAR1 ).set( pulse->getDevice()->impkwh ));
@@ -171,26 +175,6 @@ void pulseDumpConfiguration( uint8_t id, pwiPulse *pulse )
     msg.clear();
     send( msg.setSensor( id+5 ).setType( V_VAR1 ).set( pulse->isEnabled()));
 }
-
-#if 0
-    void pulseReceiveReq( uint8_t id, const char *payload )
-    {
-        uint8_t idx = ( uint8_t )( id / 10 );
-        if( idx > 0 ){
-            pwiPulse *pulse = sensors[idx-1].pulse;
-            sDevice *device = pulse->getDevice();
-            uint8_t cmd = id - 10*idx;
-        
-            switch( cmd ){
-                case 1:
-                    if( !strcmp( payload, "RAZ" )){
-                        device->countwh = 0;
-                    }
-                    break;
-            }
-        }
-    }
-#endif
 
 void pulseReceiveSet( uint8_t id, const char *payload )
 {
@@ -213,7 +197,7 @@ void pulseReceiveSet( uint8_t id, const char *payload )
                 changed = true;
                 break;
             case 4:
-                memset( device->device, '\0', DEVICE_NAME_SIZE );
+                memset( device->device, '\0', DEVICE_NAME_SIZE+1 );
                 strcpy( device->device, payload );
                 changed = true;
                 break;
@@ -221,10 +205,10 @@ void pulseReceiveSet( uint8_t id, const char *payload )
     
         if( changed ){
             eepromWrite( eeprom, saveState );
-            main_timer.restart();
+            autosave_timer.restart();
         }
-    
-        pulseDumpConfiguration( 10*idx, pulse );
+
+        pulseDumpData( 10*idx, pulse );
     }
 }
 
@@ -232,93 +216,66 @@ void pulseReceiveSet( uint8_t id, const char *payload )
  *  CHILD_MAIN Sensor
  */
 
-void mainOnAutoSave( void*empty )
+void mainAutoSaveCb( void*empty );
+void mainAutoDumpCb( void*empty );
+
+void mainPresentation()
 {
-    eepromWrite( eeprom, saveState );
-    main_timer.restart();
+    //                                1234567890123456789012345
+    present( CHILD_MAIN+1, S_CUSTOM, "Max frequency" );
+    present( CHILD_MAIN+2, S_CUSTOM, "Unchanged timeout" );
+    present( CHILD_MAIN+3, S_CUSTOM, "Enabled modules count" );
+    present( CHILD_MAIN+4, S_CUSTOM, "Autosave delay" );
 }
 
 void mainSetup()
 {
-    main_timer.setup( "MainTimer", eeprom.auto_save_ms, false, ( pwiTimerCb ) mainOnAutoSave );
-    main_timer.start();
+    autosave_timer.setup( "AutosaveTimer", eeprom.auto_save_ms, false, ( pwiTimerCb ) mainAutoSaveCb );
+    autosave_timer.start();
+    autodump_timer.setup( "AutodumpTimer", eeprom.auto_dump_ms, false, ( pwiTimerCb ) mainAutoDumpCb );
+    autodump_timer.start();
 }
 
-void mainReceiveReq( uint8_t ureq, unsigned long ulong )
+void mainAutoDumpCb( void*empty )
 {
-    switch( ureq ){
-        case 1:
-            eepromReset( eeprom, saveState );
-            break;
-        case 2:
-            dumpConfiguration();
-            break;
-        case 3:
-            mainSetMaxFrequency( ulong );
-            mainSendMaxFrequency();
-            break;
-        case 4:
-            mainSetUnchanged( ulong );
-            mainSendUnchanged();
-            break;
-        case 5:
-            eepromWrite( eeprom, saveState );
-            main_timer.restart();
-            break;
-        case 6:
-            mainSetAutosave( ulong );
-            mainSendAutosave();
-            break;
-    }
+    dumpData();
 }
 
-void mainSetAutosave( unsigned long ulong )
+void mainAutoDumpSend()
+{
+    msg.clear();
+    send( msg.setSensor( CHILD_MAIN+5 ).setType( V_VAR1 ).set( eeprom.auto_dump_ms ));
+}
+
+void mainAutoDumpSet( unsigned long ulong )
+{
+    eeprom.auto_dump_ms = ulong;
+    eepromWrite( eeprom, saveState );
+    autodump_timer.setDelay( ulong );
+    autodump_timer.restart();
+}
+
+void mainAutoSaveCb( void*empty )
+{
+    eepromWrite( eeprom, saveState );
+    autosave_timer.restart();
+}
+
+void mainAutoSaveSend()
+{
+    msg.clear();
+    send( msg.setSensor( CHILD_MAIN+4 ).setType( V_VAR1 ).set( eeprom.auto_save_ms ));
+}
+
+void mainAutoSaveSet( unsigned long ulong )
 {
     eeprom.auto_save_ms = ulong;
     eepromWrite( eeprom, saveState );
-    main_timer.setDelay( ulong );
-    main_timer.restart();
+    autosave_timer.setDelay( ulong );
+    autosave_timer.restart();
 }
 
-void mainSendAutosave()
-{
-    msg.clear();
-    send( msg.setSensor( CHILD_MAIN ).setType( V_VAR3 ).set( eeprom.auto_save_ms ));
-}
-
-void mainSetMaxFrequency( unsigned long ulong )
-{
-    eeprom.min_period_ms = ulong;
-    eepromWrite( eeprom, saveState );
-    main_timer.restart();
-    for( uint8_t i=0 ; i<DEVICE_COUNT ; ++i ){
-        sensors[i].pulse->setupTimers( eeprom.min_period_ms, eeprom.max_period_ms );
-    }
-}
-
-void mainSendMaxFrequency()
-{
-    msg.clear();
-    send( msg.setSensor( CHILD_MAIN ).setType( V_VAR1 ).set( eeprom.min_period_ms ));
-}
-
-void mainSetUnchanged( unsigned long ulong )
-{
-    eeprom.max_period_ms = ulong;
-    eepromWrite( eeprom, saveState );
-    main_timer.restart();
-    for( uint8_t i=0 ; i<DEVICE_COUNT ; ++i ){
-        sensors[i].pulse->setupTimers( eeprom.min_period_ms, eeprom.max_period_ms );
-    }
-}
-
-void mainSendUnchanged()
-{
-    msg.clear();
-    send( msg.setSensor( CHILD_MAIN ).setType( V_VAR2 ).set( eeprom.max_period_ms ));
-}
-
-void mainSendEnabledCount()
+void mainEnabledCountSend()
 {
     uint8_t count = 0;
     for( uint8_t i=0 ; i<DEVICE_COUNT ; ++i ){
@@ -327,7 +284,39 @@ void mainSendEnabledCount()
         }
     }
     msg.clear();
-    send( msg.setSensor( CHILD_MAIN ).setType( V_VAR5 ).set( count ));
+    send( msg.setSensor( CHILD_MAIN+3 ).setType( V_VAR1 ).set( count ));
+}
+
+void mainMaxFrequencySend()
+{
+    msg.clear();
+    send( msg.setSensor( CHILD_MAIN+1 ).setType( V_VAR1 ).set( eeprom.min_period_ms ));
+}
+
+void mainMaxFrequencySet( unsigned long ulong )
+{
+    eeprom.min_period_ms = ulong;
+    eepromWrite( eeprom, saveState );
+    autosave_timer.restart();
+    for( uint8_t i=0 ; i<DEVICE_COUNT ; ++i ){
+        sensors[i].pulse->setupTimers( eeprom.min_period_ms, eeprom.max_period_ms );
+    }
+}
+
+void mainUnchangedSend()
+{
+    msg.clear();
+    send( msg.setSensor( CHILD_MAIN+2 ).setType( V_VAR1 ).set( eeprom.max_period_ms ));
+}
+
+void mainUnchangedSet( unsigned long ulong )
+{
+    eeprom.max_period_ms = ulong;
+    eepromWrite( eeprom, saveState );
+    autosave_timer.restart();
+    for( uint8_t i=0 ; i<DEVICE_COUNT ; ++i ){
+        sensors[i].pulse->setupTimers( eeprom.min_period_ms, eeprom.max_period_ms );
+    }
 }
 
 /* **************************************************************************************
@@ -338,8 +327,7 @@ void presentation()
 #ifdef DEBUG_ENABLED
     Serial.println( "[presentation]" );
 #endif
-    sendSketchInfo( thisSketchName, thisSketchVersion );
-    present( CHILD_MAIN, S_CUSTOM );
+    mainPresentation();
     for( uint8_t i=0 ; i<DEVICE_COUNT ; ++i ){
         pulsePresentation( i );
     }
@@ -351,8 +339,17 @@ void setup()
     Serial.begin( 115200 );
     Serial.println( F( "[setup]" ));
 #endif
+    sendSketchInfo( thisSketchName, thisSketchVersion );
+
+    // library version
+    msg.clear();
+    mSetCommand( msg, C_INTERNAL );
+    sendAsIs( msg.setSensor( 255 ).setType( I_VERSION ).set( MYSENSORS_LIBRARY_VERSION ));
+
     //eepromReset( eeprom, saveState );
     eepromRead( eeprom, loadState, saveState );
+    eepromDump( eeprom );
+
     mainSetup();
     for( uint8_t i=0 ; i<DEVICE_COUNT ; ++i ){
         pulseSetup( i );
@@ -367,47 +364,99 @@ void loop()
     pwiTimer::Loop();
 }
 
-/**
- * Handle a V_CUSTOM request:
- */
 void receive(const MyMessage &message)
 {
-    if( message.type != V_CUSTOM ){
-        return;
-    }
-
     uint8_t cmd = message.getCommand();
-    uint8_t sensor = message.sensor;
 
-    char payload[2*MAX_PAYLOAD+1];
+    char payload[MAX_PAYLOAD+1];
     memset( payload, '\0', sizeof( payload ));
     message.getString( payload );
 
-    uint8_t ureq = strlen( payload ) > 0 ? atoi( payload ) : 0;
-    unsigned long ulong = strlen( payload ) > 2 ? atol( payload+2 ) : 0;
+#ifdef DEBUG_ENABLED
+    Serial.print( F( "[receive] sensor=" ));
+    Serial.print( message.sensor );
+    Serial.print( F( ", type=" ));
+    Serial.print( message.type );
+    Serial.print( F( ", cmd=" ));
+    Serial.print( cmd );
+    Serial.print( F( ", payload='" ));
+    Serial.print( payload );
+    Serial.println( F( "'" ));
+#endif
 
-    switch( cmd ){
-        case C_REQ:
-            if( sensor == CHILD_MAIN ){
-                mainReceiveReq( ureq, ulong );
-            }
-            break;
-        case C_SET:
-            if( sensor > CHILD_ID_PULSE_1 ){
-                pulseReceiveSet( sensor, payload );
-            }
-            break;
+    // all received messages should be V_CUSTOM
+    if( message.type != V_CUSTOM ){
+#ifdef DEBUG_ENABLED
+        Serial.println( F( "[receive] message cancelled as should be V_CUSTOM" ));
+#endif
+        return;
+    }
+
+    if( cmd == C_REQ ){
+          uint8_t ureq = strlen( payload ) > 0 ? atoi( payload ) : 0;
+#ifdef DEBUG_ENABLED
+          Serial.print( F( "[receive] C_REQ: ureq=" ));
+          Serial.println( ureq );
+#endif
+          switch( message.sensor ){
+              case CHILD_MAIN:
+                  switch ( ureq ) {
+                    case 1:
+                        eepromReset( eeprom, saveState );
+                        break;
+                    case 2:
+                        dumpData();
+                        break;
+                    case 3:
+                        eepromWrite( eeprom, saveState );
+                        break;
+                  }
+                  break;
+              case CHILD_MAIN+3:
+                  mainEnabledCountSend();
+                  break;
+          }
+
+    } else if( cmd == C_SET ){
+        unsigned long ulong = strlen( payload ) > 0 ? atol( payload ) : 0;
+#ifdef DEBUG_ENABLED
+        Serial.print( F( "[receive] C_SET: ulong=" ));
+        Serial.println( ulong );
+#endif
+        switch( message.sensor ){
+            case CHILD_MAIN+1:
+                mainMaxFrequencySet( ulong );
+                mainMaxFrequencySend();
+                break;
+            case CHILD_MAIN+2:
+                mainUnchangedSet( ulong );
+                mainUnchangedSend();
+                break;
+            case CHILD_MAIN+4:
+                mainAutoSaveSet( ulong );
+                mainAutoSaveSend();
+                break;
+            case CHILD_MAIN+5:
+                mainAutoDumpSet( ulong );
+                mainAutoDumpSend();
+                break;
+            default:
+                pulseReceiveSet( message.sensor, payload );
+                break;
+        }
     }
 }
 
-void dumpConfiguration()
+void dumpData()
 {
-    mainSendAutosave();
-    mainSendMaxFrequency();
-    mainSendUnchanged();
-    mainSendEnabledCount();
+    mainMaxFrequencySend();
+    mainUnchangedSend();
+    mainEnabledCountSend();
+    mainAutoSaveSend();
+    mainAutoDumpSend();
+
     for( uint8_t i=0 ; i<DEVICE_COUNT ; ++i ){
-        pulseDumpConfiguration( sensors[i].id, sensors[i].pulse );
+        pulseDumpData( sensors[i].id, sensors[i].pulse );
     }
 }
 
