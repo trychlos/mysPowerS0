@@ -55,6 +55,7 @@ class pwiPulse : public pwiSensor {
 
         // runtime
         bool          enabled;
+        bool          zero_sent;
 
         // isr vars
         volatile  unsigned long irq_pulse_last_ms;     // time of last interrupt

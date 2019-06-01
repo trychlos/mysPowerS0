@@ -28,6 +28,7 @@ pwiPulse::pwiPulse()
     this->last_sent_wh = 0;
 
     this->enabled = false;
+    this->zero_sent = false;
 
     this->irq_pulse_last_ms = 0;
     this->irq_pulse_count = 0;
@@ -191,7 +192,7 @@ void pwiPulse::setupTimers( unsigned long min_ms, unsigned long max_ms )
  */
 bool pwiPulse::onMeasure()
 {
-    return( this->irq_pulse_count != 0 );
+    return( this->irq_pulse_count != 0 || !this->zero_sent );
 }
 
 /**
@@ -203,20 +204,28 @@ bool pwiPulse::onMeasure()
  */
 void pwiPulse::onSend()
 {
-    this->device->countwh += this->irq_pulse_count * this->k_energy_pulse_wh;
-    this->irq_pulse_count = 0;
-
-    // compute the average consumed power since last sent message
-    // inst_power = delta_energy / delta_time
-    // by definition, delta_energy here is the energy consumed between two pulses
-    // i.e. delta_energy (Wh)   = 1000 / impkwh
-    //   so delta_energy (W.ms) = 1000 / impkwh * 3600 (s/h) * 1000 (ms/s)
-    //   so inst_power   (W)    = 1000 / impkwh * 3600 (s/h) * 1000 (ms/s) / delay_between_pulses
-    // see http://openenergymonitor.org/emon/buildingblocks/introduction-to-pulse-counting
+    float power_w = 0.0;
     unsigned long now_ms = millis();
-    unsigned long delay_ms = untilNow( now_ms, this->last_sent_ms );
-    unsigned long consumed_wh = this->device->countwh - this->last_sent_wh;
-    float power_w = this->k_power * ( float ) consumed_wh / ( float ) delay_ms;
+
+    if( this->irq_pulse_count == 0 ){
+        this->zero_sent = true;
+
+    } else {
+        this->device->countwh += this->irq_pulse_count * this->k_energy_pulse_wh;
+        this->irq_pulse_count = 0;
+        this->zero_sent = false;
+
+        // compute the average consumed power since last sent message
+        // inst_power = delta_energy / delta_time
+        // by definition, delta_energy here is the energy consumed between two pulses
+        // i.e. delta_energy (Wh)   = 1000 / impkwh
+        //   so delta_energy (W.ms) = 1000 / impkwh * 3600 (s/h) * 1000 (ms/s)
+        //   so inst_power   (W)    = 1000 / impkwh * 3600 (s/h) * 1000 (ms/s) / delay_between_pulses
+        // see http://openenergymonitor.org/emon/buildingblocks/introduction-to-pulse-counting
+        unsigned long delay_ms = untilNow( now_ms, this->last_sent_ms );
+        unsigned long consumed_wh = this->device->countwh - this->last_sent_wh;
+        power_w = this->k_power * ( float ) consumed_wh / ( float ) delay_ms;
+    }
 
     this->pSend( this->id, power_w, this->device->countwh );
     this->last_sent_ms = now_ms;
