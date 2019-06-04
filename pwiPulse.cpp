@@ -2,6 +2,7 @@
  * Pulse S0 meter module management class.
  * 
  * pwi 2019- 5-26 v2 based on pwiSensor class
+ * pwi 2019- 6- 3 v3 increment the pulse count even on the first impulsion
  */
 #include "pwiPulse.h"
 #include <untilNow.h>
@@ -103,10 +104,10 @@ void pwiPulse::onPulse()
             if( length_ms < this->device->implen ){
                 return;
             }
-
-            // inc the pulse (energy) counter
-            this->irq_pulse_count += 1;
         }
+
+        // inc the pulse (energy) counter
+        this->irq_pulse_count += 1;
     }
 }
 
