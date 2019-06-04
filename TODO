@@ -12,9 +12,7 @@
 
    1 2017- 4- 2 OTA
 
-   3 2017- 4-21 have a single request to configure the three parameters together
-
-   4
+   8
 
 -----------------------------------------------------------------------
  Done
@@ -22,6 +20,23 @@
 
    2 2017- 4- 2 configure from jeedom
      2017- 4-21 done in v1.2
+
+   3 2017- 4-21 have a single request to configure the three parameters together
+     2019- 6-1 cancelled
+
+   4 2019- 6- 1 present autodump delay sensor
+     2019- 6- 3 done in v2.2-2019
+
+   5 2019- 6- 2 send power with one decimal digit
+     2019- 6- 3 done in v2.3-2019
+
+   6 2019- 6- 3 zero power is sent as "...; 0" (with a leading space)
+     2019- 6- 3 v 2.4 try to force the type of the data in MyMessage.set() method
+     2019- 6- 4 OK. Done
+
+   7 2019- 6- 3 zero power is not repeated
+     2019- 6- 3 change the UnchangedTimeout value from 1sem to 1h, wait and see..
+                OK.
 
 -----------------------------------------------------------------------
  P. Wieser - Created on 2017, apr. 2nd
