@@ -35,6 +35,11 @@
                     send library version
                     reset power on pulse timeout
                     implement periodic data dump
+   pwi 2019- 5-26 v 2.1.4-2019
+                    present autodump delay sensor (todo #4)
+                    send power with one decimal digit (todo #5)
+                    force float value in set() method (todo #6)
+                    pwiTimer better interprets timer changes
 
   Sketch uses 21596 bytes (70%) of program storage space. Maximum is 30720 bytes.
   Global variables use 1628 bytes (79%) of dynamic memory, leaving 420 bytes for local variables. Maximum is 2048 bytes.
@@ -47,7 +52,7 @@
 #define HAVE_NRF24_RADIO
 
 static const char * const thisSketchName    = "mysPowerS0";
-static const char * const thisSketchVersion = "2.1-2019";
+static const char * const thisSketchVersion = "2.1.4-2019";
 
 enum {
     CHILD_MAIN = 1,
@@ -156,14 +161,6 @@ void pulseSetup( uint8_t idx )
     PCintPort::attachInterrupt( sensors[idx].irq_pin, sensors[idx].irqfn, FALLING );
 }
 
-void pulseSend( uint8_t id, float watt, unsigned long wh )
-{
-    msg.clear();
-    send( msg.setSensor( id ).setType( V_WATT ).set( watt, 0 ));
-    msg.clear();
-    send( msg.setSensor( id+1 ).setType( V_KWH ).set( wh ));
-}
-
 void pulseDumpData( uint8_t id, pwiPulse *pulse )
 {
     msg.clear();
@@ -212,12 +209,20 @@ void pulseReceiveSet( uint8_t id, const char *payload )
     }
 }
 
+void pulseSend( uint8_t id, float watt, unsigned long wh )
+{
+    msg.clear();
+    send( msg.setSensor( id ).setType( V_WATT ).set(( float ) watt, 1 ));
+    msg.clear();
+    send( msg.setSensor( id+1 ).setType( V_KWH ).set(( uint32_t ) wh ));
+}
+
 /* **************************************************************************************
  *  CHILD_MAIN Sensor
  */
 
-void mainAutoSaveCb( void*empty );
-void mainAutoDumpCb( void*empty );
+void mainAutoSaveCb( void *empty );
+void mainAutoDumpCb( void *empty );
 
 void mainPresentation()
 {
@@ -225,7 +230,8 @@ void mainPresentation()
     present( CHILD_MAIN+1, S_CUSTOM, "Max frequency" );
     present( CHILD_MAIN+2, S_CUSTOM, "Unchanged timeout" );
     present( CHILD_MAIN+3, S_CUSTOM, "Enabled modules count" );
-    present( CHILD_MAIN+4, S_CUSTOM, "Autosave delay" );
+    present( CHILD_MAIN+4, S_CUSTOM, "AutoSave delay" );
+    present( CHILD_MAIN+5, S_CUSTOM, "AutoDump delay" );
 }
 
 void mainSetup()
@@ -252,7 +258,6 @@ void mainAutoDumpSet( unsigned long ulong )
     eeprom.auto_dump_ms = ulong;
     eepromWrite( eeprom, saveState );
     autodump_timer.setDelay( ulong );
-    autodump_timer.restart();
 }
 
 void mainAutoSaveCb( void*empty )
@@ -272,7 +277,6 @@ void mainAutoSaveSet( unsigned long ulong )
     eeprom.auto_save_ms = ulong;
     eepromWrite( eeprom, saveState );
     autosave_timer.setDelay( ulong );
-    autosave_timer.restart();
 }
 
 void mainEnabledCountSend()
@@ -297,7 +301,6 @@ void mainMaxFrequencySet( unsigned long ulong )
 {
     eeprom.min_period_ms = ulong;
     eepromWrite( eeprom, saveState );
-    autosave_timer.restart();
     for( uint8_t i=0 ; i<DEVICE_COUNT ; ++i ){
         sensors[i].pulse->setupTimers( eeprom.min_period_ms, eeprom.max_period_ms );
     }
@@ -313,7 +316,6 @@ void mainUnchangedSet( unsigned long ulong )
 {
     eeprom.max_period_ms = ulong;
     eepromWrite( eeprom, saveState );
-    autosave_timer.restart();
     for( uint8_t i=0 ; i<DEVICE_COUNT ; ++i ){
         sensors[i].pulse->setupTimers( eeprom.min_period_ms, eeprom.max_period_ms );
     }
