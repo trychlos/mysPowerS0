@@ -29,30 +29,35 @@
    - implen = 50 ms (length of an impulsion).
 
    pwi 2017- 3-26 creation
-   pwi 2017- 4-20 v 1.1
-   pwi 2019- 5-26 v 2.0-2019 full rewrite using pwiSensor
-   pwi 2019- 5-26 v 2.1-2019
+   pwi 2017- 4-20 v1.1
+   pwi 2019- 5-26 v2.0-2019 full rewrite using pwiSensor
+   pwi 2019- 5-26 v2.1-2019
                     send library version
                     reset power on pulse timeout
                     implement periodic data dump
-   pwi 2019- 5-26 v 2.1.4-2019
+   pwi 2019- 5-26 v2.1.4-2019
                     present autodump delay sensor (todo #4)
                     send power with one decimal digit (todo #5)
                     force float value in set() method (todo #6)
                     pwiTimer better interprets timer changes
-
   Sketch uses 21596 bytes (70%) of program storage space. Maximum is 30720 bytes.
   Global variables use 1628 bytes (79%) of dynamic memory, leaving 420 bytes for local variables. Maximum is 2048 bytes.
+  
+   pwi 2019- 9-15 v2.2-2019
+                    update to pwiPrivate v190902
+                    update to pwiCommon v190904
+                    use PROGMEM macro
+                    remove signing code
+                    remove untilNow() code
+  Sketch uses 22642 bytes (73%) of program storage space. Maximum is 30720 bytes.
+Global variables use 1102 bytes (53%) of dynamic memory, leaving 946 bytes for local variables. Maximum is 2048 bytes.
 */
 
 // uncomment for debugging this sketch
-#define DEBUG_ENABLED
+#define SKETCH_DEBUG
 
-// uncomment for having mySensors radio enabled
-#define HAVE_NRF24_RADIO
-
-static const char * const thisSketchName    = "mysPowerS0";
-static const char * const thisSketchVersion = "2.1.4-2019";
+static char const thisSketchName[] PROGMEM    = "mysPowerS0";
+static char const thisSketchVersion[] PROGMEM = "2.2-2019";
 
 enum {
     CHILD_MAIN = 1,
@@ -68,16 +73,10 @@ enum {
 /* **************************************************************************************
  * MySensors gateway
  */
-//#define MY_DEBUG
+#define MY_DEBUG
 #define MY_RADIO_NRF24
-#define MY_SIGNING_SOFT
-#define MY_SIGNING_SOFT_RANDOMSEED_PIN 7
-// do not check the uplink if we choose to disable the radio
-#ifndef HAVE_NRF24_RADIO
-#define MY_TRANSPORT_WAIT_READY_MS 1000
-#define MY_TRANSPORT_UPLINK_CHECK_DISABLED
-#endif // HAVE_NRF24_RADIO
-#include <pwi_myhmac.h>
+#define MY_RF24_PA_LEVEL RF24_PA_HIGH
+//#include <pwi_myhmac.h>
 #include <pwi_myrf24.h>
 #include <MySensors.h>
 
@@ -86,8 +85,7 @@ MyMessage msg;
 /*
  * Declare our classes
  */
-#include <pwiSensor.h>
-#include <pwiTimer.h>
+#include "pwiTimer.h"
 #include "eeprom.h"
 
 sEeprom eeprom;
@@ -150,7 +148,7 @@ void pulsePresentation( uint8_t idx )
 
 void pulseSetup( uint8_t idx )
 {
-    sensors[idx].pulse->setupId( sensors[idx].id );
+    sensors[idx].pulse->setId( sensors[idx].id );
     sensors[idx].pulse->setupDevice( eeprom.device[idx] );
     sensors[idx].pulse->setupPins( sensors[idx].enabled_pin, sensors[idx].led_pin );
     sensors[idx].pulse->setupSendCb( pulseSend );
@@ -226,12 +224,12 @@ void mainAutoDumpCb( void *empty );
 
 void mainPresentation()
 {
-    //                                1234567890123456789012345
-    present( CHILD_MAIN+1, S_CUSTOM, "Max frequency" );
-    present( CHILD_MAIN+2, S_CUSTOM, "Unchanged timeout" );
-    present( CHILD_MAIN+3, S_CUSTOM, "Enabled modules count" );
-    present( CHILD_MAIN+4, S_CUSTOM, "AutoSave delay" );
-    present( CHILD_MAIN+5, S_CUSTOM, "AutoDump delay" );
+    //                                   1234567890123456789012345
+    present( CHILD_MAIN+1, S_CUSTOM, F( "Min period timer" ));
+    present( CHILD_MAIN+2, S_CUSTOM, F( "Max period timer" ));
+    present( CHILD_MAIN+3, S_CUSTOM, F( "Enabled modules count" ));
+    present( CHILD_MAIN+4, S_CUSTOM, F( "AutoSave delay" ));
+    present( CHILD_MAIN+5, S_CUSTOM, F( "AutoDump delay" ));
 }
 
 void mainSetup()
@@ -326,8 +324,8 @@ void mainUnchangedSet( unsigned long ulong )
 */
 void presentation()
 {
-#ifdef DEBUG_ENABLED
-    Serial.println( "[presentation]" );
+#ifdef SKETCH_DEBUG
+    Serial.println( "presentation()" );
 #endif
     mainPresentation();
     for( uint8_t i=0 ; i<DEVICE_COUNT ; ++i ){
@@ -337,9 +335,9 @@ void presentation()
 
 void setup()
 {
-#ifdef DEBUG_ENABLED
+#ifdef SKETCH_DEBUG
     Serial.begin( 115200 );
-    Serial.println( F( "[setup]" ));
+    Serial.println( F( "setup()" ));
 #endif
     sendSketchInfo( thisSketchName, thisSketchVersion );
 
@@ -360,7 +358,7 @@ void setup()
 
 void loop()
 {
-#ifdef DEBUG_ENABLED
+#ifdef SKETCH_DEBUG
     //Serial.println( F( "[loop]" ));
 #endif
     pwiTimer::Loop();
@@ -374,8 +372,8 @@ void receive(const MyMessage &message)
     memset( payload, '\0', sizeof( payload ));
     message.getString( payload );
 
-#ifdef DEBUG_ENABLED
-    Serial.print( F( "[receive] sensor=" ));
+#ifdef SKETCH_DEBUG
+    Serial.print( F( "receive() sensor=" ));
     Serial.print( message.sensor );
     Serial.print( F( ", type=" ));
     Serial.print( message.type );
@@ -388,16 +386,16 @@ void receive(const MyMessage &message)
 
     // all received messages should be V_CUSTOM
     if( message.type != V_CUSTOM ){
-#ifdef DEBUG_ENABLED
-        Serial.println( F( "[receive] message cancelled as should be V_CUSTOM" ));
+#ifdef SKETCH_DEBUG
+        Serial.println( F( "receive() message should be V_CUSTOM, ignored" ));
 #endif
         return;
     }
 
     if( cmd == C_REQ ){
           uint8_t ureq = strlen( payload ) > 0 ? atoi( payload ) : 0;
-#ifdef DEBUG_ENABLED
-          Serial.print( F( "[receive] C_REQ: ureq=" ));
+#ifdef SKETCH_DEBUG
+          Serial.print( F( "receive() C_REQ: ureq=" ));
           Serial.println( ureq );
 #endif
           switch( message.sensor ){
@@ -421,8 +419,8 @@ void receive(const MyMessage &message)
 
     } else if( cmd == C_SET ){
         unsigned long ulong = strlen( payload ) > 0 ? atol( payload ) : 0;
-#ifdef DEBUG_ENABLED
-        Serial.print( F( "[receive] C_SET: ulong=" ));
+#ifdef SKETCH_DEBUG
+        Serial.print( F( "receive() C_SET: ulong=" ));
         Serial.println( ulong );
 #endif
         switch( message.sensor ){

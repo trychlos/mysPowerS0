@@ -3,9 +3,11 @@
  * 
  * pwi 2019- 5-26 v2 based on pwiSensor class
  * pwi 2019- 6- 3 v3 increment the pulse count even on the first impulsion
+ * pwi 2019- 9-15 v2.2-2019
+ *                remove id private data
+ *                remove setupId() method
  */
 #include "pwiPulse.h"
-#include <untilNow.h>
 
 // uncomment to debugging this file
 #define PULSE_DEBUG
@@ -15,8 +17,6 @@
  */
 pwiPulse::pwiPulse()
 {
-    this->id = 0;
-
     this->device = NULL;
     this->k_energy_pulse_wh = 0;
     this->k_power = 0;
@@ -64,8 +64,8 @@ bool pwiPulse::isEnabled( void )
         if( was_enabled != this->enabled ){
             digitalWrite( this->led_pin, this->enabled ? HIGH : LOW );
 #ifdef PULSE_DEBUG
-            Serial.print( F( "[pwiPulse::isEnabled] id=" )); Serial.print( this->id );
-            Serial.print( F( ", enabled=" ));               Serial.println( this->enabled ? "True":"False" );
+            Serial.print( F( "pwiPulse::isEnabled() id=" )); Serial.print( this->getId());
+            Serial.print( F( ", enabled=" ));                Serial.println( this->enabled ? "True":"False" );
         }
     }
 #endif
@@ -84,7 +84,7 @@ void pwiPulse::onPulse()
 {
     if( this->isEnabled()){
 #ifdef PULSE_DEBUG
-    Serial.print( F( "[pwiPulse::onPulse]: id=" )); Serial.println( this->id );
+    Serial.print( F( "[pwiPulse::onPulse]: id=" )); Serial.println( this->getId());
 #endif
         unsigned long now_ms = millis();
         
@@ -96,7 +96,7 @@ void pwiPulse::onPulse()
         } else {
             // compute the elapsed time since last interrupt
             //  taking into account the case where the counter is in overflow
-            unsigned long length_ms = untilNow( now_ms, this->irq_pulse_last_ms );
+            unsigned long length_ms = now_ms - this->irq_pulse_last_ms;
             this->irq_pulse_last_ms = now_ms;
 
             // As there may be a train of impulsions, just ignore if interval < length of low
@@ -125,16 +125,6 @@ void pwiPulse::setupDevice( sDevice &device )
     this->device = &device;
     this->k_energy_pulse_wh = 1000.0 / ( float ) this->device->impkwh;
     this->k_power = 3600000.0 * this->k_energy_pulse_wh;
-}
-
-/**
- * pwiPulse::setupId():
- * 
- * Public
- */
-void pwiPulse::setupId( byte id )
-{
-    this->id = id;
 }
 
 /**
@@ -180,7 +170,7 @@ void pwiPulse::setupSendCb( pPulseSend pfn )
  */
 void pwiPulse::setupTimers( unsigned long min_ms, unsigned long max_ms )
 {
-    this->setup( max_ms, min_ms, ( pwiMeasureCb ) pwiPulse::MeasureCb, ( pwiSendCb ) pwiPulse::UnchangedCb, this );
+    this->setup( min_ms, max_ms, ( pwiMeasureCb ) pwiPulse::MeasureCb, ( pwiSendCb ) pwiPulse::UnchangedCb, this );
 }
 
 /**
@@ -223,12 +213,12 @@ void pwiPulse::onSend()
         //   so delta_energy (W.ms) = 1000 / impkwh * 3600 (s/h) * 1000 (ms/s)
         //   so inst_power   (W)    = 1000 / impkwh * 3600 (s/h) * 1000 (ms/s) / delay_between_pulses
         // see http://openenergymonitor.org/emon/buildingblocks/introduction-to-pulse-counting
-        unsigned long delay_ms = untilNow( now_ms, this->last_sent_ms );
+        unsigned long delay_ms = now_ms - this->last_sent_ms;
         unsigned long consumed_wh = this->device->countwh - this->last_sent_wh;
         power_w = this->k_power * ( float ) consumed_wh / ( float ) delay_ms;
     }
 
-    this->pSend( this->id, power_w, this->device->countwh );
+    this->pSend( this->getId(), power_w, this->device->countwh );
     this->last_sent_ms = now_ms;
     this->last_sent_wh = this->device->countwh;
 }

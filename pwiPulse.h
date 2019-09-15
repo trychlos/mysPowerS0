@@ -14,6 +14,9 @@
  * - the IRQ pin, and a callback function to 
  * 
  * pwi 2019- 5-26 v2 based on pwiSensor class
+ * pwi 2019- 9-15 v2.2-2019
+ *                remove id private data
+ *                remove setupId() method
  */
 
 #include <Arduino.h>
@@ -30,15 +33,11 @@ class pwiPulse : public pwiSensor {
         bool          isEnabled();
         void          onPulse();
         void          setupDevice( sDevice &device );
-        void          setupId( byte id );
         void          setupPins( byte enabled_pin, byte led_pin );
         void          setupSendCb( pPulseSend pfn );
         void          setupTimers( unsigned long min_ms, unsigned long max_ms );
                   
 	  private:
-        // setId
-        byte          id;
-
         // setDevice
         sDevice      *device;
         float         k_energy_pulse_wh;
