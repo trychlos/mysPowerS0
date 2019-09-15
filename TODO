@@ -12,7 +12,7 @@
 
    1 2017- 4- 2 OTA
 
-   8
+   9 2019- 8-26
 
 -----------------------------------------------------------------------
  Done
@@ -37,6 +37,10 @@
    7 2019- 6- 3 zero power is not repeated
      2019- 6- 3 change the UnchangedTimeout value from 1sem to 1h, wait and see..
                 OK.
+
+   8 2019- 8-26 when the sensor receives a parameter update, then send back
+                the new (updated) value
+     2019- 9-15 already done (as of v2.2-2019)
 
 -----------------------------------------------------------------------
  P. Wieser - Created on 2017, apr. 2nd
