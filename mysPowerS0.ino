@@ -49,7 +49,7 @@
                     use PROGMEM macro
                     remove signing code
                     remove untilNow() code
-  Sketch uses 22642 bytes (73%) of program storage space. Maximum is 30720 bytes.
+  Sketch uses 22638 bytes (73%) of program storage space. Maximum is 30720 bytes.
 Global variables use 1102 bytes (53%) of dynamic memory, leaving 946 bytes for local variables. Maximum is 2048 bytes.
 */
 
