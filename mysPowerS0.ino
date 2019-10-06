@@ -51,13 +51,17 @@
                     remove untilNow() code
   Sketch uses 22638 bytes (73%) of program storage space. Maximum is 30720 bytes.
 Global variables use 1102 bytes (53%) of dynamic memory, leaving 946 bytes for local variables. Maximum is 2048 bytes.
+ *
+ * pwi 2019-xx-xx v2.3-2019
+ *                  use  PGMSTR macro to handle sket name and version
+ * Sketch uses 
 */
 
 // uncomment for debugging this sketch
 #define SKETCH_DEBUG
 
-static char const thisSketchName[] PROGMEM    = "mysPowerS0";
-static char const thisSketchVersion[] PROGMEM = "2.2-2019";
+static char const sketchName[] PROGMEM    = "mysPowerS0";
+static char const sketchVersion[] PROGMEM = "2.2-2019";
 
 enum {
     CHILD_MAIN = 1,
@@ -85,7 +89,8 @@ MyMessage msg;
 /*
  * Declare our classes
  */
-#include "pwiTimer.h"
+#include <pwiCommon.h>
+#include <pwiTimer.h>
 #include "eeprom.h"
 
 sEeprom eeprom;
@@ -339,7 +344,7 @@ void setup()
     Serial.begin( 115200 );
     Serial.println( F( "setup()" ));
 #endif
-    sendSketchInfo( thisSketchName, thisSketchVersion );
+    sendSketchInfo( PGMSTR( sketchName ), PGMSTR( sketchVersion ));
 
     // library version
     msg.clear();
