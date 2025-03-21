@@ -1,0 +1,7 @@
+build/.~*
+build/mysPowerS0-backups/
+build/mysPowerS0-rescue.lib
+build/mysPowerS0.kicad_*
+build/rescue-backup/
+build/sym-lib-table
+

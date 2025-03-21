@@ -24,24 +24,23 @@
 #include "device.h"
 
 // MySensors::send()
-typedef void ( *pPulseSend )( uint8_t, float, unsigned long );
+typedef void ( *pPulseSend )( uint8_t, uint32_t, uint32_t );
 
 class pwiPulse : public pwiSensor {
 	  public:
-		                  pwiPulse();
+		                  pwiPulse( uint8_t id, uint8_t enabled_pin, uint8_t input_pin, uint8_t led_pin );
         sDevice      *getDevice();
         bool          isEnabled();
-        void          onPulse();
         void          setupDevice( sDevice &device );
-        void          setupPins( byte enabled_pin, byte led_pin );
         void          setupSendCb( pPulseSend pfn );
         void          setupTimers( unsigned long min_ms, unsigned long max_ms );
+        void          testInput();
                   
 	  private:
-        // setDevice
+        // setupDevice
         sDevice      *device;
-        float         k_energy_pulse_wh;
-        float         k_power;
+        uint32_t      k_energy_wh;
+        uint32_t      k_power_w;
 
         // setupPins
         byte          enabled_pin;
@@ -49,16 +48,18 @@ class pwiPulse : public pwiSensor {
 
         // setupSendCb
         pPulseSend    pSend;
-        unsigned long last_sent_ms;
-        unsigned long last_sent_wh;
+        uint32_t      last_sent_imp_count;
 
         // runtime
         bool          enabled;
-        bool          zero_sent;
+        uint32_t      last_ms;
+        uint8_t       last_state;
+        uint32_t      imp_count;
+        uint32_t      power_inst;
 
         // isr vars
-        volatile  unsigned long irq_pulse_last_ms;     // time of last interrupt
-        volatile  unsigned long irq_pulse_count;       // count of pulses, used to measure energy
+        //volatile  unsigned long irq_pulse_last_ms;     // time of last interrupt
+        //volatile  unsigned long irq_pulse_count;       // count of pulses, used to measure energy
 
         // private methods
         bool          onMeasure();

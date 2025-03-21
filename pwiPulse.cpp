@@ -15,24 +15,28 @@
 /*
  * Constructor
  */
-pwiPulse::pwiPulse()
+pwiPulse::pwiPulse( uint8_t id, uint8_t enabled_pin, uint8_t input_pin, uint8_t led_pin )
 {
+    // setup pwiSensor base class
+    this->setId( id );
+    this->setPin( input_pin );
+ 
+    // setup own properties
     this->device = NULL;
-    this->k_energy_pulse_wh = 0;
-    this->k_power = 0;
+    this->k_energy_wh = 0;
+    this->k_power_w = 0;
 
-    this->enabled_pin = 0;
-    this->led_pin = 0;
+    this->enabled_pin = enabled_pin;
+    this->led_pin = led_pin;
 
     this->pSend = NULL;
-    this->last_sent_ms = 0;
-    this->last_sent_wh = 0;
+    this->last_sent_imp_count = 0;
 
     this->enabled = false;
-    this->zero_sent = false;
-
-    this->irq_pulse_last_ms = 0;
-    this->irq_pulse_count = 0;
+    this->last_ms = 0;
+    this->last_state = 0;
+    this->imp_count = 0;
+    this->power_inst = 0;
 }
 
 /**
@@ -80,6 +84,7 @@ bool pwiPulse::isEnabled( void )
  * 
  * Public
  */
+#if 0
 void pwiPulse::onPulse()
 {
     if( this->isEnabled()){
@@ -110,43 +115,22 @@ void pwiPulse::onPulse()
         this->irq_pulse_count += 1;
     }
 }
+#endif
 
 /**
  * pwiPulse::setupDevice():
  * 
  * Pre-compute some constants:
- * - k_energy_pulse_wh: energy consumed in Wh between two pulses
- * - k_power:         a constant to compute the instant power
+ * - k_energy_wh: energy consumed in Wh between two pulses
+ * - k_power_w:   a constant to compute the instant power
  * 
  * Public
  */
 void pwiPulse::setupDevice( sDevice &device )
 {
     this->device = &device;
-    this->k_energy_pulse_wh = 1000.0 / ( float ) this->device->impkwh;
-    this->k_power = 3600000.0 * this->k_energy_pulse_wh;
-}
-
-/**
- * pwiPulse::setupPins():
- * 
- * If both irq_pin, pfn and pFunc are defined, then attach the trigger to the falling edge
- * of the specified IRQ.
- * 
- * Public
- */
-void pwiPulse::setupPins( byte enabled_pin, byte led_pin )
-{
-    this->enabled_pin = enabled_pin;
-    if( enabled_pin ){
-        pinMode( this->enabled_pin, INPUT_PULLUP );
-    }
-
-    this->led_pin = led_pin;
-    if( led_pin ){
-        digitalWrite( this->led_pin, LOW );
-        pinMode( this->led_pin, OUTPUT );
-    }
+    this->k_energy_wh = 1000 / this->device->impkwh;
+    this->k_power_w = 3600000 * this->k_energy_wh;
 }
 
 /**
@@ -174,6 +158,39 @@ void pwiPulse::setupTimers( unsigned long min_ms, unsigned long max_ms )
 }
 
 /**
+ * pwiPulse::testInput():
+ * 
+ * Test for a falling edge on the input pin: this is counted as *one* impulsion
+ * 
+ * Public
+ */
+void pwiPulse::testInput()
+{
+    uint8_t state = digitalRead( this->getPin());
+    // falling edge
+    if( state == LOW && this->last_state == HIGH ){
+        this->imp_count += 1;
+        uint32_t now = millis();
+        this->power_inst = this->last_ms ? this->k_power_w / ( now - this->last_ms ) : 0;
+#ifdef SKETCH_DEBUG
+        Serial.print( F( "falling edge detected count=" ));
+        Serial.print( this->imp_count );
+        Serial.print( F( " now=" ));
+        Serial.print( now );
+        if( this->last_ms ){
+            Serial.print( F( " P.Inst=" ));
+            Serial.print( this->power_inst );
+            Serial.println( F( " W" ));
+        } else {
+            Serial.println( F( " P.Inst not computed" ));
+        }
+#endif
+        this->last_ms = now;
+    }
+    this->last_state = state;
+}
+
+/**
  * pwiPulse::onMeasure():
  * 
  * Min period, aka max frequency, timer callback.
@@ -183,7 +200,7 @@ void pwiPulse::setupTimers( unsigned long min_ms, unsigned long max_ms )
  */
 bool pwiPulse::onMeasure()
 {
-    return( this->irq_pulse_count != 0 || !this->zero_sent );
+    return( this->imp_count != this->last_sent_imp_count );
 }
 
 /**
@@ -195,32 +212,9 @@ bool pwiPulse::onMeasure()
  */
 void pwiPulse::onSend()
 {
-    float power_w = 0.0;
-    unsigned long now_ms = millis();
-
-    if( this->irq_pulse_count == 0 ){
-        this->zero_sent = true;
-
-    } else {
-        this->device->countwh += this->irq_pulse_count * this->k_energy_pulse_wh;
-        this->irq_pulse_count = 0;
-        this->zero_sent = false;
-
-        // compute the average consumed power since last sent message
-        // inst_power = delta_energy / delta_time
-        // by definition, delta_energy here is the energy consumed between two pulses
-        // i.e. delta_energy (Wh)   = 1000 / impkwh
-        //   so delta_energy (W.ms) = 1000 / impkwh * 3600 (s/h) * 1000 (ms/s)
-        //   so inst_power   (W)    = 1000 / impkwh * 3600 (s/h) * 1000 (ms/s) / delay_between_pulses
-        // see http://openenergymonitor.org/emon/buildingblocks/introduction-to-pulse-counting
-        unsigned long delay_ms = now_ms - this->last_sent_ms;
-        unsigned long consumed_wh = this->device->countwh - this->last_sent_wh;
-        power_w = this->k_power * ( float ) consumed_wh / ( float ) delay_ms;
-    }
-
-    this->pSend( this->getId(), power_w, this->device->countwh );
-    this->last_sent_ms = now_ms;
-    this->last_sent_wh = this->device->countwh;
+    this->device->countwh += this->imp_count * this->k_energy_wh;
+    this->pSend( this->getId(), this->power_inst, this->device->countwh );
+    this->last_sent_imp_count = this->imp_count;
 }
 
 /**

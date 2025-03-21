@@ -7,6 +7,7 @@
    Interrupts
    Configuration
    Hardware
+   References
 
 -----------------------------------------------------------------------
  Description
@@ -21,7 +22,7 @@
 
  Each Pulse S0 module use three pins:
  - the data input pin;
- - an enable pin, which has to be shortened to GND if the module is not
+ - an enabled pin, which has to be shortened to GND if the module is not
    present;
  - a LED pin which is on when the module is enabled.
 
@@ -86,9 +87,21 @@
  1000 imp/kWh
  90 ms
  http://www.cartelectronic.fr/electricite/52-compteur-energie-retroeclaire.html
- 25 € TTC port compris
+ 25.00 € TTC port compris
+
+-----------------------------------------------------------------------
+ References
+ ==========
+
+ [kWh meter with S0 measurement](https://www.ztatz.nl/kwh-meter-met-s0-meting/)
+
+ [Detection of S0 interface pulse](https://forum.arduino.cc/t/erkennung-s0-schnittstellen-impuls/344974)
+
+ [S0 measurement value acquisition of electricity meters](https://blog.elektrowolle.de/2011/07/26/s0-messwerterfassung-von-stromzahlern/)
+ 
+ [Arduino interrupts](https://gammon.com.au/interrupts)
 
 -----------------------------------------------------------------------
  P. Wieser - Created on 2017, apr. 2nd
-             Last updated on 2010, june 1st.
+             Last updated on 2025, mar. 20th
 

@@ -14,7 +14,7 @@
  *  
  *  The energy counter would be nice to be saved automatically, but we avoid this due to
  *  the max write cycles count the EEPROM can handle (~100 000 cycles).
- *  Instead, this data may be still be saved on program request.
+ *  Instead, this data may still be saved on program request.
  * 
  * pwi 2019- 5-26 v1 creation
  */
