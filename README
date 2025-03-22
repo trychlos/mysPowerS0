@@ -5,6 +5,7 @@
  
    Description
    Interrupts
+   Computation notice
    Configuration
    Hardware
    References
@@ -42,6 +43,36 @@
  manage it through software interrupts.
 
  Pulse counter is triggered on descending IRQ.
+ 
+ As of v3.0-2025, it appears that interrupts have some inherent drawbacks,
+ one of them being that millis() function is stopped during interrupt
+ routines, as it itself relies on interrupts.
+ 
+-----------------------------------------------------------------------
+ Computation notice
+ ==================
+ 
+ The used DRS-155D module is specified as:
+ 
+ - max 50A
+ - 1000 imp per kWh (or also 1 imp per Wh)
+ - 90ms per imp
+ 
+ Which means that:
+ 
+ - max measured power is 50 x 220 = 11000 W
+ - 11000 W generate 11 x 1000 imp per hour
+ - so the max impulsions frequency to be managed is 11000 / 3600 = 3.056 impulsions per second
+	so the minimum impulsions period is 327.3 ms, much greater than the 90ms wide of each impulsion.
+
+ Counting one impulsion each 327.3ms is very easy with a Nano, and doesn't require any interrupt management.
+ 
+ What about the resolution, or the minimal measurable power ?
+ 
+ Say we have a 50W load. This will consume 50 Wh in one hour, and so we will have to count 50 impulsions per hour,
+ which means that we will receive one impulsion every 72 sec.
+ 
+ So each impulsion is counted, and provide an energy increment.
 
 -----------------------------------------------------------------------
  Configuration
@@ -82,12 +113,12 @@
  ========
 
  DRS155-D
- monophasé
+ monophasÃ©
  50 A
  1000 imp/kWh
  90 ms
  http://www.cartelectronic.fr/electricite/52-compteur-energie-retroeclaire.html
- 25.00 € TTC port compris
+ 25.00 â‚¬ TTC port compris
 
 -----------------------------------------------------------------------
  References

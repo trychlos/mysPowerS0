@@ -54,9 +54,11 @@ Global variables use 1102 bytes (53%) of dynamic memory, leaving 946 bytes for l
  *
  * pwi 2019-xx-xx v2.3-2019
  *                  use  PGMSTR macro to handle sket name and version
- *
  * pwi 2025- 3-21 v3.0-2025
  *                  no more use interrupts
+ * pwi 2025- 3-22 v3.1-2025
+ *                  use new pwiSensor interface
+ *                  no more send data for not-enabled sensors
  * Sketch uses 
 */
 
@@ -64,7 +66,7 @@ Global variables use 1102 bytes (53%) of dynamic memory, leaving 946 bytes for l
 #define SKETCH_DEBUG
 
 static char const sketchName[] PROGMEM    = "mysPowerS0";
-static char const sketchVersion[] PROGMEM = "3.0-2025";
+static char const sketchVersion[] PROGMEM = "3.1-2025";
 
 enum {
     CHILD_MAIN = 1,
@@ -107,20 +109,20 @@ pwiTimer autodump_timer;
  *  The count of defined sensors is in device.h, iself being included in eeprom.h.
  */
 
-#include "pwiPulse.h"
+#include "power_counter.h"
 
-pwiPulse pulse1( CHILD_ID_PULSE_1, 3, A0,  7 );
-pwiPulse pulse2( CHILD_ID_PULSE_2, 4, A1,  8 );
-pwiPulse pulse3( CHILD_ID_PULSE_3, 5, A2, A4 );
-pwiPulse pulse4( CHILD_ID_PULSE_4, 6, A3, A5 );
+PowerCounter counter1( CHILD_ID_PULSE_1, 3, A0,  7 );
+PowerCounter counter2( CHILD_ID_PULSE_2, 4, A1,  8 );
+PowerCounter counter3( CHILD_ID_PULSE_3, 5, A2, A4 );
+PowerCounter counter4( CHILD_ID_PULSE_4, 6, A3, A5 );
 
-void pulseSend( uint8_t id, uint32_t watt, uint32_t wh );
+void powerSend( uint8_t id, uint32_t watt, uint32_t wh );
 
-pwiPulse *sensors[DEVICE_COUNT] = {
-    &pulse1,
-    &pulse2,
-    &pulse3,
-    &pulse4
+PowerCounter *sensors[DEVICE_COUNT] = {
+    &counter1,
+    &counter2,
+    &counter3,
+    &counter4
 };
 
 /*
@@ -128,25 +130,26 @@ pwiPulse *sensors[DEVICE_COUNT] = {
  * At this time, it is not yet initialized.
  * But we present at least the CHILD_ID+0 to CHILD_ID+5 internal sensors.
  */
-void pulsePresentation( uint8_t idx )
+void powerPresentation( uint8_t idx )
 {
     for( uint8_t count=0 ; count<CHILD_ID_COUNT ; ++count ){
         present( sensors[idx]->getId()+count, S_POWER );
     }
 }
 
-void pulseSetup( uint8_t idx )
+void powerSetup( uint8_t idx )
 {
     // setup computed properties
-    sensors[idx]->setupDevice( eeprom.device[idx] );
-    sensors[idx]->setupSendCb( pulseSend );
-    sensors[idx]->setupTimers( eeprom.min_period_ms, eeprom.max_period_ms );
+    sensors[idx]->setDevice( eeprom.device[idx] );
+    sensors[idx]->setSendFn( powerSend );
+    sensors[idx]->setTimers( eeprom.min_period_ms, eeprom.max_period_ms );
     // initialize input pin
-    digitalWrite( sensors[idx]->getPin(), HIGH );
-    pinMode( sensors[idx]->getPin(), INPUT );
+    uint8_t inputPin = sensors[idx]->getInputPin();
+    digitalWrite( inputPin, HIGH );
+    pinMode( inputPin, INPUT );
 }
 
-void pulseDumpData( uint8_t idx )
+void powerDumpData( uint8_t idx )
 {
     uint8_t id = sensors[idx]->getId();
     msg.clear();
@@ -159,12 +162,12 @@ void pulseDumpData( uint8_t idx )
     send( msg.setSensor( id+5 ).setType( V_VAR1 ).set( sensors[idx]->isEnabled()));
 }
 
-void pulseReceiveSet( uint8_t id, const char *payload )
+void powerReceiveSet( uint8_t id, const char *payload )
 {
     uint8_t idx = ( uint8_t )( id / 10 );
     if( idx > 0 ){
-        pwiPulse *pulse = sensors[idx-1];
-        sDevice *device = pulse->getDevice();
+        PowerCounter *sensor = sensors[idx-1];
+        sDevice *device = sensor->getDevice();
         
         uint8_t cmd = id - 10*idx;
         unsigned long ulong = atol( payload );
@@ -191,11 +194,11 @@ void pulseReceiveSet( uint8_t id, const char *payload )
             autosave_timer.restart();
         }
 
-        pulseDumpData( idx-1 );
+        powerDumpData( idx-1 );
     }
 }
 
-void pulseSend( uint8_t id, uint32_t watt, uint32_t wh )
+void powerSend( uint8_t id, uint32_t watt, uint32_t wh )
 {
     msg.clear();
     send( msg.setSensor( id ).setType( V_WATT ).set(( uint32_t ) watt ));
@@ -288,7 +291,7 @@ void mainMaxFrequencySet( unsigned long ulong )
     eeprom.min_period_ms = ulong;
     eepromWrite( eeprom, saveState );
     for( uint8_t i=0 ; i<DEVICE_COUNT ; ++i ){
-        sensors[i]->setupTimers( eeprom.min_period_ms, eeprom.max_period_ms );
+        sensors[i]->setTimers( eeprom.min_period_ms, eeprom.max_period_ms );
     }
 }
 
@@ -303,7 +306,7 @@ void mainUnchangedSet( unsigned long ulong )
     eeprom.max_period_ms = ulong;
     eepromWrite( eeprom, saveState );
     for( uint8_t i=0 ; i<DEVICE_COUNT ; ++i ){
-        sensors[i]->setupTimers( eeprom.min_period_ms, eeprom.max_period_ms );
+        sensors[i]->setTimers( eeprom.min_period_ms, eeprom.max_period_ms );
     }
 }
 
@@ -317,7 +320,7 @@ void presentation()
 #endif
     mainPresentation();
     for( uint8_t i=0 ; i<DEVICE_COUNT ; ++i ){
-        pulsePresentation( i );
+        powerPresentation( i );
     }
 }
 
@@ -340,7 +343,7 @@ void setup()
 
     mainSetup();
     for( uint8_t i=0 ; i<DEVICE_COUNT ; ++i ){
-        pulseSetup( i );
+        powerSetup( i );
     }
 }
 
@@ -351,7 +354,7 @@ void loop()
 #endif
     // check for each pwiPulse sensor whether it detects a falling edge on its input pin
     for( uint8_t i=0 ; i<DEVICE_COUNT ; ++i ){
-        sensors[i]->testInput();
+        sensors[i]->loopInput();
     }
     // and then let the timers do their jobs
     pwiTimer::Loop();
@@ -434,7 +437,7 @@ void receive(const MyMessage &message)
                 mainAutoDumpSend();
                 break;
             default:
-                pulseReceiveSet( message.sensor, payload );
+                powerReceiveSet( message.sensor, payload );
                 break;
         }
     }
@@ -449,7 +452,7 @@ void dumpData()
     mainAutoDumpSend();
 
     for( uint8_t i=0 ; i<DEVICE_COUNT ; ++i ){
-        pulseDumpData( i );
+        powerDumpData( i );
     }
 }
 
