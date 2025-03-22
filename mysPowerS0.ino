@@ -198,7 +198,7 @@ void pulseReceiveSet( uint8_t id, const char *payload )
 void pulseSend( uint8_t id, uint32_t watt, uint32_t wh )
 {
     msg.clear();
-    send( msg.setSensor( id ).setType( V_WATT ).set(( uint32_t ) watt, 1 ));
+    send( msg.setSensor( id ).setType( V_WATT ).set(( uint32_t ) watt ));
     msg.clear();
     send( msg.setSensor( id+1 ).setType( V_KWH ).set(( uint32_t ) wh ));
 }
