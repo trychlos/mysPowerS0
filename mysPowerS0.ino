@@ -59,14 +59,17 @@ Global variables use 1102 bytes (53%) of dynamic memory, leaving 946 bytes for l
  * pwi 2025- 3-22 v3.1-2025
  *                  use new pwiSensor interface
  *                  no more send data for not-enabled sensors
- * Sketch uses 
+ * pwi 2025- 3-23 v3.2-2025
+ *                fix enabled counter detection (input mode of enabled pin)
+ * Sketch uses 20182 bytes (65%) of program storage space. Maximum is 30720 bytes.
+ * Global variables use 1043 bytes (50%) of dynamic memory, leaving 1005 bytes for local variables. Maximum is 2048 bytes.
 */
 
 // uncomment for debugging this sketch
 #define SKETCH_DEBUG
 
 static char const sketchName[] PROGMEM    = "mysPowerS0";
-static char const sketchVersion[] PROGMEM = "3.1-2025";
+static char const sketchVersion[] PROGMEM = "3.2-2025";
 
 enum {
     CHILD_MAIN = 1,
@@ -143,10 +146,6 @@ void powerSetup( uint8_t idx )
     sensors[idx]->setDevice( eeprom.device[idx] );
     sensors[idx]->setSendFn( powerSend );
     sensors[idx]->setTimers( eeprom.min_period_ms, eeprom.max_period_ms );
-    // initialize input pin
-    uint8_t inputPin = sensors[idx]->getInputPin();
-    digitalWrite( inputPin, HIGH );
-    pinMode( inputPin, INPUT );
 }
 
 void powerDumpData( uint8_t idx )
@@ -271,11 +270,16 @@ void mainAutoSaveSet( unsigned long ulong )
 void mainEnabledCountSend()
 {
     uint8_t count = 0;
+    bool enabled = false;
     for( uint8_t i=0 ; i<DEVICE_COUNT ; ++i ){
-        if( sensors[i]->isEnabled()){
-            count += 1;
-        }
+        enabled = sensors[i]->isEnabled();
+        count += ( enabled ? 1 : 0 );
     }
+#ifdef SKETCH_DEBUG
+    Serial.print( F( "counted " ));
+    Serial.print( count );
+    Serial.println( F( " enabled modules" ));
+#endif
     msg.clear();
     send( msg.setSensor( CHILD_MAIN+3 ).setType( V_VAR1 ).set( count ));
 }

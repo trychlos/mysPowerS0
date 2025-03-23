@@ -8,6 +8,8 @@
  *                remove setupId() method
  * pwi 2025- 3-22 v3.1-2025
  *                take advantage of PowerCounterSensor base virtual class
+ * pwi 2025- 3-23 v3.2-2025
+ *                fix enabled counter detection (input mode of enabled pin)
  */
 #include "power_counter.h"
 
@@ -32,12 +34,18 @@ PowerCounter::PowerCounter( uint8_t id, uint8_t enabled_pin, uint8_t input_pin, 
     this->k_power_w = 0;
 
     this->enabled_pin = enabled_pin;
+    if( enabled_pin ){
+        pinMode( enabled_pin, INPUT_PULLUP );
+    }
     this->led_pin = led_pin;
+    if( led_pin ){
+        pinMode( led_pin, OUTPUT );
+        digitalWrite( led_pin, LOW );
+    }
 
     this->sendFn = NULL;
     this->last_imp_count_sent = 0;
 
-    this->enabled = false;
     this->last_ms = 0;
     this->power_inst = 0;
 }
@@ -64,19 +72,20 @@ sDevice *PowerCounter::getDevice()
  */
 bool PowerCounter::isEnabled( void )
 {
+    bool enabled = false;
     if( this->enabled_pin ){
-        bool was_enabled = this->enabled;
         byte value = digitalRead( this->enabled_pin );
-        this->enabled = ( value == HIGH && this->device != NULL );
-        if( was_enabled != this->enabled ){
-            digitalWrite( this->led_pin, this->enabled ? HIGH : LOW );
+        enabled = ( value == HIGH && this->device != NULL );
+        digitalWrite( this->led_pin, enabled ? HIGH : LOW );
 #ifdef PULSE_DEBUG
-            Serial.print( F( "PowerCounter::isEnabled() id=" )); Serial.print( this->getId());
-            Serial.print( F( ", enabled=" ));                Serial.println( this->enabled ? "True":"False" );
-        }
+        Serial.print( F( "PowerCounter::isEnabled() id=" ));
+        Serial.print( this->getId());
+        Serial.print( F( ", enabled=" ));
+        Serial.print( enabled ? "True":"False" );
+        Serial.println( "" );
     }
 #endif
-    return( this->enabled );
+    return( enabled );
 }
 
 /**

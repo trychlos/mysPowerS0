@@ -51,7 +51,6 @@ class PowerCounter : public pwiPulseSensor {
         uint32_t      last_imp_count_sent;
 
         // runtime
-        bool          enabled;
         uint32_t      last_ms;
         uint32_t      power_inst;
 
