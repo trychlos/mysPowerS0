@@ -61,15 +61,19 @@ Global variables use 1102 bytes (53%) of dynamic memory, leaving 946 bytes for l
  *                  no more send data for not-enabled sensors
  * pwi 2025- 3-23 v3.2-2025
  *                fix enabled counter detection (input mode of enabled pin)
- * Sketch uses 20182 bytes (65%) of program storage space. Maximum is 30720 bytes.
- * Global variables use 1043 bytes (50%) of dynamic memory, leaving 1005 bytes for local variables. Maximum is 2048 bytes.
-*/
+ * pwi 2025- 7-31 v3.3-2025
+ *                add bounce protection
+ *                enabled-led flashes briefly (250ms) on each pulse
+  Sketch uses 19950 bytes (64%) of program storage space. Maximum is 30720 bytes.
+  Global variables use 1053 bytes (51%) of dynamic memory, leaving 995 bytes for local variables. Maximum is 2048 bytes.
+ *
+ */
 
 // uncomment for debugging this sketch
-#define SKETCH_DEBUG
+//#define SKETCH_DEBUG
 
 static char const sketchName[] PROGMEM    = "mysPowerS0";
-static char const sketchVersion[] PROGMEM = "3.2-2025";
+static char const sketchVersion[] PROGMEM = "3.3-2025";
 
 enum {
     CHILD_MAIN = 1,
@@ -86,7 +90,7 @@ enum {
  * MySensors gateway
  */
 #define MY_DEBUG
-#define MY_RADIO_NRF24
+#define MY_RADIO_RF24
 #define MY_RF24_PA_LEVEL RF24_PA_HIGH
 #include <pwi_myhmac.h>
 #include <pwi_myrf24.h>

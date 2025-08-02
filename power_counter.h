@@ -10,9 +10,6 @@
  * La présence d'un module est signalée par la borne enabledPin à l'état HIGH.
  * Cette présence est testée une fois à chaque lecture.
  * 
- * The object has to be initialized with :
- * - the IRQ pin, and a callback function to 
- * 
  * pwi 2019- 5-26 v2 based on pwiSensor class
  * pwi 2019- 9-15 v2.2-2019
  *                remove id private data
@@ -53,6 +50,7 @@ class PowerCounter : public pwiPulseSensor {
         // runtime
         uint32_t      last_ms;
         uint32_t      power_inst;
+        uint32_t      ledoff;
 
     protected:
         bool          vMeasure();
