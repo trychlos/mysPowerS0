@@ -40,40 +40,36 @@
                     send power with one decimal digit (todo #5)
                     force float value in set() method (todo #6)
                     pwiTimer better interprets timer changes
-  Sketch uses 21596 bytes (70%) of program storage space. Maximum is 30720 bytes.
-  Global variables use 1628 bytes (79%) of dynamic memory, leaving 420 bytes for local variables. Maximum is 2048 bytes.
-  
    pwi 2019- 9-15 v2.2-2019
                     update to pwiPrivate v190902
                     update to pwiCommon v190904
                     use PROGMEM macro
                     remove signing code
                     remove untilNow() code
-  Sketch uses 22638 bytes (73%) of program storage space. Maximum is 30720 bytes.
-Global variables use 1102 bytes (53%) of dynamic memory, leaving 946 bytes for local variables. Maximum is 2048 bytes.
- *
- * pwi 2019-xx-xx v2.3-2019
- *                  use  PGMSTR macro to handle sket name and version
- * pwi 2025- 3-21 v3.0-2025
- *                  no more use interrupts
- * pwi 2025- 3-22 v3.1-2025
- *                  use new pwiSensor interface
- *                  no more send data for not-enabled sensors
- * pwi 2025- 3-23 v3.2-2025
- *                fix enabled counter detection (input mode of enabled pin)
- * pwi 2025- 7-31 v3.3-2025
- *                add bounce protection
- *                enabled-led flashes briefly (250ms) on each pulse
+   pwi 2019-xx-xx v2.3-2019
+                    use  PGMSTR macro to handle sket name and version
+   pwi 2025- 3-21 v3.0-2025
+                    no more use interrupts
+   pwi 2025- 3-22 v3.1-2025
+                    use new pwiSensor interface
+                    no more send data for not-enabled sensors
+   pwi 2025- 3-23 v3.2-2025
+                  fix enabled counter detection (input mode of enabled pin)
+   pwi 2025- 7-31 v3.3-2025
+                  add bounce protection
+                  enabled-led flashes briefly (250ms) on each pulse
+   pwi 2025- 8- 4 v3.4-2025
+                  let the controller reset the device countwh data
+                  rationale: try to align our internal counter (Wh) with the device display (kWh)
   Sketch uses 19950 bytes (64%) of program storage space. Maximum is 30720 bytes.
   Global variables use 1053 bytes (51%) of dynamic memory, leaving 995 bytes for local variables. Maximum is 2048 bytes.
- *
  */
 
 // uncomment for debugging this sketch
 //#define SKETCH_DEBUG
 
 static char const sketchName[] PROGMEM    = "mysPowerS0";
-static char const sketchVersion[] PROGMEM = "3.3-2025";
+static char const sketchVersion[] PROGMEM = "3.4-2025";
 
 enum {
     CHILD_MAIN = 1,
@@ -84,7 +80,7 @@ enum {
 };
 
 // each child sensor is able to send up to 6 info messages (from +0 to +5)
-#define CHILD_ID_COUNT  6
+#define CHILD_ID_COUNT  7
 
 /* **************************************************************************************
  * MySensors gateway
@@ -163,6 +159,8 @@ void powerDumpData( uint8_t idx )
     send( msg.setSensor( id+4 ).setType( V_VAR1 ).set( sensors[idx]->getDevice()->device ));
     msg.clear();
     send( msg.setSensor( id+5 ).setType( V_VAR1 ).set( sensors[idx]->isEnabled()));
+    msg.clear();
+    send( msg.setSensor( id+6 ).setType( V_VAR1 ).set( sensors[idx]->getDevice()->countwh ));
 }
 
 void powerReceiveSet( uint8_t id, const char *payload )
@@ -178,20 +176,28 @@ void powerReceiveSet( uint8_t id, const char *payload )
     
         switch( cmd ){
             case 2:
+                // payload is the count of pulses per kWh (e.g. 1000)
                 device->impkwh = ulong;
                 changed = true;
                 break;
             case 3:
+                // payload is the length in ms of each pulse (e.g. 90)
                 device->implen = ulong;
                 changed = true;
                 break;
             case 4:
+                // payload is the device name (e.g. "DRS155-D")
                 memset( device->device, '\0', DEVICE_NAME_SIZE+1 );
                 strcpy( device->device, payload );
                 changed = true;
                 break;
+            case 6:
+                // payload is the device display in kWh, with decimales
+                device->countwh = 1000.0 * atof( payload );
+                changed = true;
+                break;
         }
-    
+
         if( changed ){
             eepromWrite( eeprom, saveState );
             autosave_timer.restart();

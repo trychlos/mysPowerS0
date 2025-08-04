@@ -1,0 +1,4 @@
+2025-08-02
+==========
+Si le DRS155-D affiche des kwH avec deux décimales, alors la LED intégrée clignote tous les Wh.
+
