@@ -10,7 +10,7 @@
  *  
  *  These devices are managed individually, one at once.
  *  We record in the EEPROM their individual characteristics, along with (on request) the
- *  current WH energy counter.
+ *  current Wh energy counter.
  *  
  *  The energy counter would be nice to be saved automatically, but we avoid this due to
  *  the max write cycles count the EEPROM can handle (~100 000 cycles).

@@ -51,6 +51,7 @@ PowerCounter::PowerCounter( uint8_t id, uint8_t enabled_pin, uint8_t input_pin, 
     this->last_ms = 0;
     this->power_inst = 0;
     this->ledoff = 0;
+    this->initial_sent = false;
 }
 
 /**
@@ -61,6 +62,18 @@ PowerCounter::PowerCounter( uint8_t id, uint8_t enabled_pin, uint8_t input_pin, 
 sDevice *PowerCounter::getDevice()
 {
     return( this->device );
+}
+
+/**
+ * PowerCounter::initialsSent():
+ *
+ * The initial messages have been sent at startup.
+ * 
+ * Public
+ */
+void PowerCounter::initialsSent( void )
+{
+    this->initial_sent = true;
 }
 
 /**
@@ -78,7 +91,7 @@ bool PowerCounter::isEnabled( void )
     bool enabled = false;
     if( this->enabled_pin ){
         byte value = digitalRead( this->enabled_pin );
-        enabled = ( value == HIGH && this->device != NULL );
+        enabled = ( value == HIGH && this->device != NULL && this->device->impkwh && this->device->implen && strlen( this->device->device ));
         // if we have defined a LED and it is not OFF after a pulse..
         if( this->led_pin && !this->ledoff ){
             digitalWrite( this->led_pin, enabled ? HIGH : LOW );
@@ -94,6 +107,26 @@ bool PowerCounter::isEnabled( void )
 */
     }
     return( enabled );
+}
+
+/**
+ * isInitialSent:
+ * 
+ * Returns: %TRUE if the initial messages have been sent
+ * 
+ * Public
+ */
+bool PowerCounter::isInitialSent( void )
+{
+    bool sent = this->initial_sent;
+#ifdef COUNTER_DEBUG
+    Serial.print( F( "PowerCounter::isInitialSent() id=" ));
+    Serial.print( this->getId());
+    Serial.print( F( ", initial_sent=" ));
+    Serial.print( sent ? "True":"False" );
+    Serial.println( "" );
+#endif
+    return( sent );
 }
 
 /**

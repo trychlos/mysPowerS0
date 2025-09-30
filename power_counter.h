@@ -26,9 +26,11 @@ typedef void ( *PowerSendFn )( uint8_t, uint32_t, uint32_t );
 
 class PowerCounter : public pwiPulseSensor {
 	  public:
-		                  PowerCounter( uint8_t id, uint8_t enabled_pin, uint8_t input_pin, uint8_t led_pin );
+		              PowerCounter( uint8_t id, uint8_t enabled_pin, uint8_t input_pin, uint8_t led_pin );
         sDevice      *getDevice();
+        void          initialsSent( void );
         bool          isEnabled();
+        bool          isInitialSent();
         void          setDevice( sDevice &device );
         void          setSendFn( PowerSendFn pfn );
         void          loopInput();
@@ -51,6 +53,7 @@ class PowerCounter : public pwiPulseSensor {
         uint32_t      last_ms;
         uint32_t      power_inst;
         uint32_t      ledoff;
+        bool          initial_sent;
 
     protected:
         bool          vMeasure();

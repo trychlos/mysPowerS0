@@ -47,7 +47,7 @@
                     remove signing code
                     remove untilNow() code
    pwi 2019-xx-xx v2.3-2019
-                    use  PGMSTR macro to handle sket name and version
+                    use  PGMSTR macro to handle sketch name and version
    pwi 2025- 3-21 v3.0-2025
                     no more use interrupts
    pwi 2025- 3-22 v3.1-2025
@@ -61,28 +61,41 @@
    pwi 2025- 8- 4 v3.4-2025
                   let the controller reset the device countwh data
                   rationale: try to align our internal counter (Wh) with the device display (kWh)
+   pwi 2025- 9-30 v4.0-2025
+                  review the whole children identifiers and types (align on mysCellar, adapt to HA)
+                  PowerCounter is now initialized to empty, being fully set marking the enable status
+                  Instant power and consumed energy are on the same S_POWER child id
+                  NB: energy stored is Wh while energy sent is kWh
+
   Sketch uses 19950 bytes (64%) of program storage space. Maximum is 30720 bytes.
   Global variables use 1053 bytes (51%) of dynamic memory, leaving 995 bytes for local variables. Maximum is 2048 bytes.
  */
 
 // uncomment for debugging this sketch
-//#define SKETCH_DEBUG
+#define SKETCH_DEBUG
 
 static char const sketchName[] PROGMEM    = "mysPowerS0";
-static char const sketchVersion[] PROGMEM = "3.4-2025";
+static char const sketchVersion[] PROGMEM = "4.0-2025";
 
 enum {
-    CHILD_MAIN = 1,
-    CHILD_ID_PULSE_1 = 10,
-    CHILD_ID_PULSE_2 = 20,
-    CHILD_ID_PULSE_3 = 30,
-    CHILD_ID_PULSE_4 = 40
+    CHILD_MAIN                  = 1,
+    CHILD_MAIN_LOG              = CHILD_MAIN+0,
+    CHILD_MAIN_ACTION_RESET     = CHILD_MAIN+1,
+    CHILD_MAIN_ACTION_DUMP      = CHILD_MAIN+2,
+    CHILD_MAIN_ACTION_SAVE      = CHILD_MAIN+3,
+    CHILD_MAIN_PARM_SAVE_PERIOD = CHILD_MAIN+5,
+    CHILD_MAIN_PARM_DUMP_PERIOD = CHILD_MAIN+6,
+    CHILD_MAIN_PARM_MIN_PERIOD  = CHILD_MAIN+7,
+    CHILD_MAIN_PARM_MAX_PERIOD  = CHILD_MAIN+8,
+
+    CHILD_ID_PULSE_1            = 10,
+    CHILD_ID_PULSE_2            = 20,
+    CHILD_ID_PULSE_3            = 30,
+    CHILD_ID_PULSE_4            = 40
 };
 
-// each child sensor is able to send up to 6 info messages (from +0 to +5)
-#define CHILD_ID_COUNT  7
-
-/* **************************************************************************************
+/* **********************************************************************************************************
+   **********************************************************************************************************
  * MySensors gateway
  */
 #define MY_DEBUG
@@ -105,11 +118,12 @@ sEeprom eeprom;
 pwiTimer autosave_timer;
 pwiTimer autodump_timer;
 
-/* **************************************************************************************
+/* **********************************************************************************************************
+   **********************************************************************************************************
  * Pulse S0 module management
  * 
  * - up to four modules
- *  The count of defined sensors is in device.h, iself being included in eeprom.h.
+ *  The max count of defined sensors (which depends of the board) is in device.h, iself being included in eeprom.h.
  */
 
 #include "power_counter.h"
@@ -131,13 +145,26 @@ PowerCounter *sensors[DEVICE_COUNT] = {
 /*
  * Present a Pulse S0 module
  * At this time, it is not yet initialized.
- * But we present at least the CHILD_ID+0 to CHILD_ID+5 internal sensors.
  */
 void powerPresentation( uint8_t idx )
 {
-    for( uint8_t count=0 ; count<CHILD_ID_COUNT ; ++count ){
-        present( sensors[idx]->getId()+count, S_POWER );
-    }
+    char payload [1+MAX_PAYLOAD];
+    //                                             1234567890123456789012345
+    memset( payload, '\0', sizeof( payload ));
+    snprintf_P( payload, MAX_PAYLOAD, PSTR( "Power sensor id=%u" ), sensors[idx]->getId());
+    present( sensors[idx]->getId()+0, S_POWER, payload );
+    memset( payload, '\0', sizeof( payload ));
+    snprintf_P( payload, MAX_PAYLOAD, PSTR( "Impulsions/kwh id=%u" ), sensors[idx]->getId());
+    present( sensors[idx]->getId()+1, S_INFO, payload );
+    memset( payload, '\0', sizeof( payload ));
+    snprintf_P( payload, MAX_PAYLOAD, PSTR( "Impulsion length id=%u" ), sensors[idx]->getId());
+    present( sensors[idx]->getId()+2, S_INFO, payload );
+    memset( payload, '\0', sizeof( payload ));
+    snprintf_P( payload, MAX_PAYLOAD, PSTR( "Model id=%u" ), sensors[idx]->getId());
+    present( sensors[idx]->getId()+3, S_INFO, payload );
+    memset( payload, '\0', sizeof( payload ));
+    snprintf_P( payload, MAX_PAYLOAD, PSTR( "Initial energy id=%u" ), sensors[idx]->getId());
+    present( sensors[idx]->getId()+4, S_INFO, payload );
 }
 
 void powerSetup( uint8_t idx )
@@ -146,24 +173,32 @@ void powerSetup( uint8_t idx )
     sensors[idx]->setDevice( eeprom.device[idx] );
     sensors[idx]->setSendFn( powerSend );
     sensors[idx]->setTimers( eeprom.min_period_ms, eeprom.max_period_ms );
+    powerSend( idx, 0, eeprom.device[idx].countwh );
+    powerDumpData( idx );
+    // this is a fake message to let the controller initialize the initial energy entity
+    msg.clear();
+    send( msg.setSensor( sensors[idx]->getId()+4 ).setType( V_TEXT ).set( 0 ));
+    sensors[idx]->initialsSent();
 }
 
 void powerDumpData( uint8_t idx )
 {
     uint8_t id = sensors[idx]->getId();
+    char payload[1+MAX_PAYLOAD];
     msg.clear();
-    send( msg.setSensor( id+2 ).setType( V_VAR1 ).set( sensors[idx]->getDevice()->impkwh ));
+    // the first time this message is sent, it is not ackownledged by the gateway
+    send( msg.setSensor( id+1 ).setType( V_TEXT ).set( sensors[idx]->getDevice()->impkwh ));
+    wait( 5 );
+    send( msg.setSensor( id+1 ).setType( V_TEXT ).set( sensors[idx]->getDevice()->impkwh ));
     msg.clear();
-    send( msg.setSensor( id+3 ).setType( V_VAR1 ).set( sensors[idx]->getDevice()->implen ));
+    send( msg.setSensor( id+2 ).setType( V_TEXT ).set( sensors[idx]->getDevice()->implen ));
     msg.clear();
-    send( msg.setSensor( id+4 ).setType( V_VAR1 ).set( sensors[idx]->getDevice()->device ));
-    msg.clear();
-    send( msg.setSensor( id+5 ).setType( V_VAR1 ).set( sensors[idx]->isEnabled()));
-    msg.clear();
-    send( msg.setSensor( id+6 ).setType( V_VAR1 ).set( sensors[idx]->getDevice()->countwh ));
+    send( msg.setSensor( id+3 ).setType( V_TEXT ).set( sensors[idx]->getDevice()->device ));
 }
 
-void powerReceiveSet( uint8_t id, const char *payload )
+// a message has been received which is not managed by the main sensor
+// expects it will be by a power sensor (but not sure)
+void powerReceive( uint8_t id, const char *payload )
 {
     uint8_t idx = ( uint8_t )( id / 10 );
     if( idx > 0 ){
@@ -175,24 +210,25 @@ void powerReceiveSet( uint8_t id, const char *payload )
         bool changed = false;
     
         switch( cmd ){
-            case 2:
+            case 1:
                 // payload is the count of pulses per kWh (e.g. 1000)
                 device->impkwh = ulong;
                 changed = true;
                 break;
-            case 3:
+            case 2:
                 // payload is the length in ms of each pulse (e.g. 90)
                 device->implen = ulong;
                 changed = true;
                 break;
-            case 4:
+            case 3:
                 // payload is the device name (e.g. "DRS155-D")
                 memset( device->device, '\0', DEVICE_NAME_SIZE+1 );
                 strcpy( device->device, payload );
                 changed = true;
                 break;
-            case 6:
+            case 4:
                 // payload is the device display in kWh, with decimales
+                // it must replace the current energy count which is incremented and sent back to the controller
                 device->countwh = 1000.0 * atof( payload );
                 changed = true;
                 break;
@@ -201,9 +237,9 @@ void powerReceiveSet( uint8_t id, const char *payload )
         if( changed ){
             eepromWrite( eeprom, saveState );
             autosave_timer.restart();
+            mainLogSend(( char * ) "Change done" );
+            powerDumpData( idx-1 );
         }
-
-        powerDumpData( idx-1 );
     }
 }
 
@@ -212,24 +248,31 @@ void powerSend( uint8_t id, uint32_t watt, uint32_t wh )
     msg.clear();
     send( msg.setSensor( id ).setType( V_WATT ).set(( uint32_t ) watt ));
     msg.clear();
-    send( msg.setSensor( id+1 ).setType( V_KWH ).set(( uint32_t ) wh ));
+    send( msg.setSensor( id ).setType( V_KWH ).set( wh/1000.0, 2 ));
 }
 
-/* **************************************************************************************
+/* **********************************************************************************************************
+   **********************************************************************************************************
  *  CHILD_MAIN Sensor
  */
 
 void mainAutoSaveCb( void *empty );
 void mainAutoDumpCb( void *empty );
 
+bool main_initial_sents = false;
+bool main_log_initial_sent = false;
+
 void mainPresentation()
 {
-    //                                   1234567890123456789012345
-    present( CHILD_MAIN+1, S_CUSTOM, F( "Min period timer" ));
-    present( CHILD_MAIN+2, S_CUSTOM, F( "Max period timer" ));
-    present( CHILD_MAIN+3, S_CUSTOM, F( "Enabled modules count" ));
-    present( CHILD_MAIN+4, S_CUSTOM, F( "AutoSave delay" ));
-    present( CHILD_MAIN+5, S_CUSTOM, F( "AutoDump delay" ));
+    //                                                  1234567890123456789012345
+    present( CHILD_MAIN_LOG,              S_INFO,   F( "Board logs" ));
+    present( CHILD_MAIN_ACTION_RESET,     S_BINARY, F( "Action: reset eeprom" ));
+    present( CHILD_MAIN_ACTION_DUMP,      S_BINARY, F( "Action: dump eeprom" ));
+    present( CHILD_MAIN_ACTION_SAVE,      S_BINARY, F( "Action: write in eeprom" ));
+    present( CHILD_MAIN_PARM_SAVE_PERIOD, S_INFO,   F( "Parm: eeprom save period" ));
+    present( CHILD_MAIN_PARM_DUMP_PERIOD, S_INFO,   F( "Parm: eeprom dump period" ));
+    present( CHILD_MAIN_PARM_MIN_PERIOD,  S_INFO,   F( "Parm: report min period" ));
+    present( CHILD_MAIN_PARM_MAX_PERIOD,  S_INFO,   F( "Parm: report max period" ));
 }
 
 void mainSetup()
@@ -238,6 +281,102 @@ void mainSetup()
     autosave_timer.start();
     autodump_timer.setup( "AutodumpTimer", eeprom.auto_dump_ms, false, ( pwiTimerCb ) mainAutoDumpCb );
     autodump_timer.start();
+    mainActionResetSend();
+    mainActionDumpSend();
+    mainActionSaveSend();
+    mainAutoSaveSend();
+    mainAutoDumpSend();
+    mainMinPeriodSend();
+    mainMaxPeriodSend();
+    main_initial_sents = true;
+}
+
+/* called from main loop() function
+ * make sure we send an initial log value (e.g. 'Ready' ) to the controller at startup after all other children
+ */
+void mainInitialLoop( void )
+{
+    if( main_initial_sents && !main_log_initial_sent ){
+        // are all the initial message for all sensors have been sent ?
+        bool sensors_sent = true;
+        for( uint8_t i=0 ; i<DEVICE_COUNT ; ++i ){
+            bool sent = sensors[i]->isInitialSent();
+            if( !sent ){
+                sensors_sent = false;
+                break;
+            }
+        }
+        if( sensors_sent ){
+            mainLogSend(( char * ) "Node ready" );
+            main_log_initial_sent = true;
+        }
+    }
+}
+
+void mainActionDumpDo()
+{
+    dumpData();
+}
+
+void mainActionDumpSend()
+{
+    uint8_t sensor_id = CHILD_MAIN_ACTION_DUMP;
+    uint8_t msg_type = V_STATUS;
+    uint8_t payload = 0;
+#ifdef SKETCH_DEBUG
+    Serial.print( F( "[mainActionDumpSend] sensor=" ));
+    Serial.print( sensor_id );
+    Serial.print( F( ", type=" ));
+    Serial.print( msg_type );
+    Serial.print( F( ", payload=" ));
+    Serial.println( payload );
+#endif
+    msg.clear();
+    send( msg.setSensor( sensor_id ).setType( msg_type ).set( payload ));
+}
+
+void mainActionResetDo()
+{
+    eepromReset( eeprom, saveState );
+}
+
+void mainActionResetSend()
+{
+    uint8_t sensor_id = CHILD_MAIN_ACTION_RESET;
+    uint8_t msg_type = V_STATUS;
+    uint8_t payload = 0;
+#ifdef SKETCH_DEBUG
+    Serial.print( F( "[mainActionResetSend] sensor=" ));
+    Serial.print( sensor_id );
+    Serial.print( F( ", type=" ));
+    Serial.print( msg_type );
+    Serial.print( F( ", payload=" ));
+    Serial.println( payload );
+#endif
+    msg.clear();
+    send( msg.setSensor( sensor_id ).setType( msg_type ).set( payload ));
+}
+
+void mainActionSaveDo()
+{
+    eepromWrite( eeprom, saveState );
+}
+
+void mainActionSaveSend()
+{
+    uint8_t sensor_id = CHILD_MAIN_ACTION_SAVE;
+    uint8_t msg_type = V_STATUS;
+    uint8_t payload = 0;
+#ifdef SKETCH_DEBUG
+    Serial.print( F( "[mainActionSaveSend] sensor=" ));
+    Serial.print( sensor_id );
+    Serial.print( F( ", type=" ));
+    Serial.print( msg_type );
+    Serial.print( F( ", payload=" ));
+    Serial.println( payload );
+#endif
+    msg.clear();
+    send( msg.setSensor( sensor_id ).setType( msg_type ).set( payload ));
 }
 
 void mainAutoDumpCb( void*empty )
@@ -248,7 +387,7 @@ void mainAutoDumpCb( void*empty )
 void mainAutoDumpSend()
 {
     msg.clear();
-    send( msg.setSensor( CHILD_MAIN+5 ).setType( V_VAR1 ).set( eeprom.auto_dump_ms ));
+    send( msg.setSensor( CHILD_MAIN_PARM_DUMP_PERIOD ).setType( V_TEXT ).set( eeprom.auto_dump_ms ));
 }
 
 void mainAutoDumpSet( unsigned long ulong )
@@ -267,7 +406,7 @@ void mainAutoSaveCb( void*empty )
 void mainAutoSaveSend()
 {
     msg.clear();
-    send( msg.setSensor( CHILD_MAIN+4 ).setType( V_VAR1 ).set( eeprom.auto_save_ms ));
+    send( msg.setSensor( CHILD_MAIN_PARM_SAVE_PERIOD ).setType( V_TEXT ).set( eeprom.auto_save_ms ));
 }
 
 void mainAutoSaveSet( unsigned long ulong )
@@ -277,45 +416,19 @@ void mainAutoSaveSet( unsigned long ulong )
     autosave_timer.setDelay( ulong );
 }
 
-void mainEnabledCountSend()
-{
-    uint8_t count = 0;
-    bool enabled = false;
-    for( uint8_t i=0 ; i<DEVICE_COUNT ; ++i ){
-        enabled = sensors[i]->isEnabled();
-        count += ( enabled ? 1 : 0 );
-    }
-#ifdef SKETCH_DEBUG
-    Serial.print( F( "counted " ));
-    Serial.print( count );
-    Serial.println( F( " enabled modules" ));
-#endif
-    msg.clear();
-    send( msg.setSensor( CHILD_MAIN+3 ).setType( V_VAR1 ).set( count ));
-}
-
-void mainMaxFrequencySend()
+void mainLogSend( char *log )
 {
     msg.clear();
-    send( msg.setSensor( CHILD_MAIN+1 ).setType( V_VAR1 ).set( eeprom.min_period_ms ));
+    send( msg.setSensor( CHILD_MAIN_LOG ).setType( V_TEXT ).set( log ));
 }
 
-void mainMaxFrequencySet( unsigned long ulong )
-{
-    eeprom.min_period_ms = ulong;
-    eepromWrite( eeprom, saveState );
-    for( uint8_t i=0 ; i<DEVICE_COUNT ; ++i ){
-        sensors[i]->setTimers( eeprom.min_period_ms, eeprom.max_period_ms );
-    }
-}
-
-void mainUnchangedSend()
+void mainMaxPeriodSend()
 {
     msg.clear();
-    send( msg.setSensor( CHILD_MAIN+2 ).setType( V_VAR1 ).set( eeprom.max_period_ms ));
+    send( msg.setSensor( CHILD_MAIN_PARM_MAX_PERIOD ).setType( V_TEXT ).set( eeprom.max_period_ms ));
 }
 
-void mainUnchangedSet( unsigned long ulong )
+void mainMaxPeriodSet( unsigned long ulong )
 {
     eeprom.max_period_ms = ulong;
     eepromWrite( eeprom, saveState );
@@ -324,9 +437,29 @@ void mainUnchangedSet( unsigned long ulong )
     }
 }
 
-/* **************************************************************************************
+void mainMinPeriodSend()
+{
+    msg.clear();
+    send( msg.setSensor( CHILD_MAIN_PARM_MIN_PERIOD ).setType( V_TEXT ).set( eeprom.min_period_ms ));
+}
+
+void mainMinPeriodSet( unsigned long ulong )
+{
+    eeprom.min_period_ms = ulong;
+    eepromWrite( eeprom, saveState );
+    for( uint8_t i=0 ; i<DEVICE_COUNT ; ++i ){
+        sensors[i]->setTimers( eeprom.min_period_ms, eeprom.max_period_ms );
+    }
+}
+
+/* **********************************************************************************************************
+   **********************************************************************************************************
     MAIN CODE
 */
+
+// As of MySensors v2.x, presentation() is called before setup().
+// pwi 2022- 4- 7 do not send rthe library version here as this is nonetheless the first thing the Arduino
+//  MySensors library sends at startup
 void presentation()
 {
 #ifdef SKETCH_DEBUG
@@ -346,11 +479,6 @@ void setup()
 #endif
     sendSketchInfo( PGMSTR( sketchName ), PGMSTR( sketchVersion ));
 
-    // library version
-    msg.clear();
-    mSetCommand( msg, C_INTERNAL );
-    sendAsIs( msg.setSensor( 255 ).setType( I_VERSION ).set( MYSENSORS_LIBRARY_VERSION ));
-
     //eepromReset( eeprom, saveState );
     eepromRead( eeprom, loadState, saveState );
     eepromDump( eeprom );
@@ -363,14 +491,13 @@ void setup()
 
 void loop()
 {
-#ifdef SKETCH_DEBUG
-    //Serial.println( F( "[loop]" ));
-#endif
+    // sends a 'Node ready' message when all initializations are done
+    mainInitialLoop();
     // check for each pwiPulse sensor whether it detects a falling edge on its input pin
     for( uint8_t i=0 ; i<DEVICE_COUNT ; ++i ){
         sensors[i]->loopInput();
     }
-    // and then let the timers do their jobs
+    // and let the timers do their job
     pwiTimer::Loop();
 }
 
@@ -394,76 +521,72 @@ void receive(const MyMessage &message)
     Serial.println( F( "'" ));
 #endif
 
-    // all received messages should be V_CUSTOM
-    if( message.type != V_CUSTOM ){
-#ifdef SKETCH_DEBUG
-        Serial.println( F( "receive() message should be V_CUSTOM, ignored" ));
-#endif
-        return;
-    }
-
-    if( cmd == C_REQ ){
-          uint8_t ureq = strlen( payload ) > 0 ? atoi( payload ) : 0;
-#ifdef SKETCH_DEBUG
-          Serial.print( F( "receive() C_REQ: ureq=" ));
-          Serial.println( ureq );
-#endif
-          switch( message.sensor ){
-              case CHILD_MAIN:
-                  switch ( ureq ) {
-                    case 1:
-                        eepromReset( eeprom, saveState );
-                        break;
-                    case 2:
-                        dumpData();
-                        break;
-                    case 3:
-                        eepromWrite( eeprom, saveState );
-                        break;
-                  }
-                  break;
-              case CHILD_MAIN+3:
-                  mainEnabledCountSend();
-                  break;
-          }
-
-    } else if( cmd == C_SET ){
-        unsigned long ulong = strlen( payload ) > 0 ? atol( payload ) : 0;
-#ifdef SKETCH_DEBUG
-        Serial.print( F( "receive() C_SET: ulong=" ));
-        Serial.println( ulong );
-#endif
+    if( cmd == C_SET ){
+        uint8_t ureq = strlen( payload ) > 0 ? atoi( payload ) : 0;
+        static const char * period = "period=";
         switch( message.sensor ){
-            case CHILD_MAIN+1:
-                mainMaxFrequencySet( ulong );
-                mainMaxFrequencySend();
+            case CHILD_MAIN_ACTION_RESET:
+                if( message.type == V_STATUS && ureq == 1 ){
+                    mainActionResetDo();
+                    mainActionResetSend();
+                    mainLogSend(( char * ) "eeprom reset done" );
+                }
                 break;
-            case CHILD_MAIN+2:
-                mainUnchangedSet( ulong );
-                mainUnchangedSend();
+            case CHILD_MAIN_ACTION_DUMP:
+                if( message.type == V_STATUS && ureq == 1 ){
+                    mainActionDumpDo();
+                    mainActionDumpSend();
+                    mainLogSend(( char * ) "eeprom dump done" );
+                }
                 break;
-            case CHILD_MAIN+4:
-                mainAutoSaveSet( ulong );
-                mainAutoSaveSend();
+            case CHILD_MAIN_ACTION_SAVE:
+                if( message.type == V_STATUS && ureq == 1 ){
+                    mainActionSaveDo();
+                    mainActionSaveSend();
+                    mainLogSend(( char * ) "eeprom save done" );
+                }
                 break;
-            case CHILD_MAIN+5:
-                mainAutoDumpSet( ulong );
-                mainAutoDumpSend();
+            case CHILD_MAIN_PARM_SAVE_PERIOD:
+                if( message.type == V_TEXT && strncmp( payload, period, strlen( period )) == 0 ){
+                    unsigned long ulong = strlen( payload ) > strlen( period ) ? atol( payload+strlen( period )) : 0;
+                    mainAutoSaveSet( ulong );
+                    mainAutoSaveSend();
+                }
+                break;
+            case CHILD_MAIN_PARM_DUMP_PERIOD:
+                if( message.type == V_TEXT && strncmp( payload, period, strlen( period )) == 0 ){
+                    unsigned long ulong = strlen( payload ) > strlen( period ) ? atol( payload+strlen( period )) : 0;
+                    mainAutoDumpSet( ulong );
+                    mainAutoDumpSend();
+                }
+                break;
+            case CHILD_MAIN_PARM_MAX_PERIOD:
+                if( message.type == V_TEXT && strncmp( payload, period, strlen( period )) == 0 ){
+                    unsigned long ulong = strlen( payload ) > strlen( period ) ? atol( payload+strlen( period )) : 0;
+                    mainMaxPeriodSet( ulong );
+                    mainMaxPeriodSend();
+                }
+                break;
+            case CHILD_MAIN_PARM_MIN_PERIOD:
+                if( message.type == V_TEXT && strncmp( payload, period, strlen( period )) == 0 ){
+                    unsigned long ulong = strlen( payload ) > strlen( period ) ? atol( payload+strlen( period )) : 0;
+                    mainMinPeriodSet( ulong );
+                    mainMinPeriodSend();
+                }
                 break;
             default:
-                powerReceiveSet( message.sensor, payload );
+                powerReceive( message.sensor, payload );
                 break;
         }
-    }
+    } // end of cmd == C_SET
 }
 
 void dumpData()
 {
-    mainMaxFrequencySend();
-    mainUnchangedSend();
-    mainEnabledCountSend();
     mainAutoSaveSend();
     mainAutoDumpSend();
+    mainMinPeriodSend();
+    mainMaxPeriodSend();
 
     for( uint8_t i=0 ; i<DEVICE_COUNT ; ++i ){
         powerDumpData( i );
