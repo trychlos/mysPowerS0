@@ -66,16 +66,18 @@
                   PowerCounter is now initialized to empty, being fully set marking the enable status
                   Instant power and consumed energy are on the same S_POWER child id
                   NB: energy stored is Wh while energy sent is kWh
+   pwi 2025- 9-30 v4.1-2025
+                  Remove the 'period=' payload prefix from configuration parameters
 
-  Sketch uses 19950 bytes (64%) of program storage space. Maximum is 30720 bytes.
-  Global variables use 1053 bytes (51%) of dynamic memory, leaving 995 bytes for local variables. Maximum is 2048 bytes.
+  Sketch uses 23162 bytes (75%) of program storage space. Maximum is 30720 bytes.
+  Global variables use 1175 bytes (57%) of dynamic memory, leaving 873 bytes for local variables. Maximum is 2048 bytes.
  */
 
 // uncomment for debugging this sketch
 #define SKETCH_DEBUG
 
 static char const sketchName[] PROGMEM    = "mysPowerS0";
-static char const sketchVersion[] PROGMEM = "4.0-2025";
+static char const sketchVersion[] PROGMEM = "4.1-2025";
 
 enum {
     CHILD_MAIN                  = 1,
@@ -386,8 +388,19 @@ void mainAutoDumpCb( void*empty )
 
 void mainAutoDumpSend()
 {
+    uint8_t sensor_id = CHILD_MAIN_PARM_DUMP_PERIOD;
+    uint8_t msg_type = V_TEXT;
+    unsigned long payload = eeprom.auto_dump_ms;
+#ifdef SKETCH_DEBUG
+    Serial.print( F( "[mainAutoDumpSend] sensor=" ));
+    Serial.print( sensor_id );
+    Serial.print( F( ", type=" ));
+    Serial.print( msg_type );
+    Serial.print( F( ", payload=" ));
+    Serial.println( payload );
+#endif
     msg.clear();
-    send( msg.setSensor( CHILD_MAIN_PARM_DUMP_PERIOD ).setType( V_TEXT ).set( eeprom.auto_dump_ms ));
+    send( msg.setSensor( sensor_id ).setType( msg_type ).set( payload ));
 }
 
 void mainAutoDumpSet( unsigned long ulong )
@@ -405,8 +418,19 @@ void mainAutoSaveCb( void*empty )
 
 void mainAutoSaveSend()
 {
+    uint8_t sensor_id = CHILD_MAIN_PARM_SAVE_PERIOD;
+    uint8_t msg_type = V_TEXT;
+    unsigned long payload = eeprom.auto_save_ms;
+#ifdef SKETCH_DEBUG
+    Serial.print( F( "[mainAutoSaveSend] sensor=" ));
+    Serial.print( sensor_id );
+    Serial.print( F( ", type=" ));
+    Serial.print( msg_type );
+    Serial.print( F( ", payload=" ));
+    Serial.println( payload );
+#endif
     msg.clear();
-    send( msg.setSensor( CHILD_MAIN_PARM_SAVE_PERIOD ).setType( V_TEXT ).set( eeprom.auto_save_ms ));
+    send( msg.setSensor( sensor_id ).setType( msg_type ).set( payload ));
 }
 
 void mainAutoSaveSet( unsigned long ulong )
@@ -424,8 +448,19 @@ void mainLogSend( char *log )
 
 void mainMaxPeriodSend()
 {
+    uint8_t sensor_id = CHILD_MAIN_PARM_MAX_PERIOD;
+    uint8_t msg_type = V_TEXT;
+    unsigned long payload = eeprom.max_period_ms;
+#ifdef SKETCH_DEBUG
+    Serial.print( F( "[mainAutoSaveSend] sensor=" ));
+    Serial.print( sensor_id );
+    Serial.print( F( ", type=" ));
+    Serial.print( msg_type );
+    Serial.print( F( ", payload=" ));
+    Serial.println( payload );
+#endif
     msg.clear();
-    send( msg.setSensor( CHILD_MAIN_PARM_MAX_PERIOD ).setType( V_TEXT ).set( eeprom.max_period_ms ));
+    send( msg.setSensor( sensor_id ).setType( msg_type ).set( payload ));
 }
 
 void mainMaxPeriodSet( unsigned long ulong )
@@ -439,8 +474,19 @@ void mainMaxPeriodSet( unsigned long ulong )
 
 void mainMinPeriodSend()
 {
+    uint8_t sensor_id = CHILD_MAIN_PARM_MIN_PERIOD;
+    uint8_t msg_type = V_TEXT;
+    unsigned long payload = eeprom.min_period_ms;
+#ifdef SKETCH_DEBUG
+    Serial.print( F( "[mainAutoSaveSend] sensor=" ));
+    Serial.print( sensor_id );
+    Serial.print( F( ", type=" ));
+    Serial.print( msg_type );
+    Serial.print( F( ", payload=" ));
+    Serial.println( payload );
+#endif
     msg.clear();
-    send( msg.setSensor( CHILD_MAIN_PARM_MIN_PERIOD ).setType( V_TEXT ).set( eeprom.min_period_ms ));
+    send( msg.setSensor( sensor_id ).setType( msg_type ).set( payload ));
 }
 
 void mainMinPeriodSet( unsigned long ulong )
@@ -523,7 +569,7 @@ void receive(const MyMessage &message)
 
     if( cmd == C_SET ){
         uint8_t ureq = strlen( payload ) > 0 ? atoi( payload ) : 0;
-        static const char * period = "period=";
+        unsigned long ulong = strlen( payload ) ? atol( payload ) : 0;
         switch( message.sensor ){
             case CHILD_MAIN_ACTION_RESET:
                 if( message.type == V_STATUS && ureq == 1 ){
@@ -547,29 +593,25 @@ void receive(const MyMessage &message)
                 }
                 break;
             case CHILD_MAIN_PARM_SAVE_PERIOD:
-                if( message.type == V_TEXT && strncmp( payload, period, strlen( period )) == 0 ){
-                    unsigned long ulong = strlen( payload ) > strlen( period ) ? atol( payload+strlen( period )) : 0;
+                if( message.type == V_TEXT && strlen( payload )){
                     mainAutoSaveSet( ulong );
                     mainAutoSaveSend();
                 }
                 break;
             case CHILD_MAIN_PARM_DUMP_PERIOD:
-                if( message.type == V_TEXT && strncmp( payload, period, strlen( period )) == 0 ){
-                    unsigned long ulong = strlen( payload ) > strlen( period ) ? atol( payload+strlen( period )) : 0;
+                if( message.type == V_TEXT && strlen( payload )){
                     mainAutoDumpSet( ulong );
                     mainAutoDumpSend();
                 }
                 break;
             case CHILD_MAIN_PARM_MAX_PERIOD:
-                if( message.type == V_TEXT && strncmp( payload, period, strlen( period )) == 0 ){
-                    unsigned long ulong = strlen( payload ) > strlen( period ) ? atol( payload+strlen( period )) : 0;
+                if( message.type == V_TEXT && strlen( payload )){
                     mainMaxPeriodSet( ulong );
                     mainMaxPeriodSend();
                 }
                 break;
             case CHILD_MAIN_PARM_MIN_PERIOD:
-                if( message.type == V_TEXT && strncmp( payload, period, strlen( period )) == 0 ){
-                    unsigned long ulong = strlen( payload ) > strlen( period ) ? atol( payload+strlen( period )) : 0;
+                if( message.type == V_TEXT && strlen( payload )){
                     mainMinPeriodSet( ulong );
                     mainMinPeriodSend();
                 }
