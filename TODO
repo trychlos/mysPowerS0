@@ -12,7 +12,9 @@
 
    1 2017- 4- 2 OTA
 
-   9
+   9 2025-10- 1 reset device should set all constants to zero so that it appears disabled
+
+  10
 
 -----------------------------------------------------------------------
  Done

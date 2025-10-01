@@ -1,4 +1,4 @@
-/*
+/* **********************************************************************************************************
  * Pulse S0 meter module management class based on DRS155-D.
  * 
  * pwi 2019- 5-26 v2 based on pwiSensor class

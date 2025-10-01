@@ -1,6 +1,7 @@
 #ifndef __POWER_COUNTER_H__
 #define __POWER_COUNTER_H__
-/*
+
+/* **********************************************************************************************************
  * Pulse S0 meter module management class based on DRS155-D.
  * 
  * Sortie par impulsion compatible avec "SO" Din-Rail 43864
